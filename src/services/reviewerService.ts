@@ -4,10 +4,26 @@ import { RunDoc, Action } from "../types";
 import { Prompts } from "./prompts";
 import { logApiCall } from "./usageService";
 
+// Helper for consistency with other services
 const getAI = () => {
   const key = process.env.API_KEY;
   if (!key || key.trim() === '') return null;
   return new GoogleGenAI({ apiKey: key });
+};
+
+// Retry helper specifically for the reviewer batch loop
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+const isRetryableError = (error: any) => {
+  const msg = (error.message || JSON.stringify(error)).toLowerCase();
+  return (
+    msg.includes('503') || 
+    msg.includes('overloaded') || 
+    msg.includes('internal server error') ||
+    msg.includes('internal error') ||
+    msg.includes('"code":500') ||
+    msg.includes('"status":"internal"')
+  );
 };
 
 export interface ReviewSuggestion {
@@ -17,14 +33,16 @@ export interface ReviewSuggestion {
 
 export const runReviewLoop = async (
   runDoc: RunDoc, 
-  model: string = 'gemini-3-flash-preview'
+  model: string = 'gemini-3-flash-preview',
+  onProgress?: (msg: string) => void
 ): Promise<ReviewSuggestion[]> => {
   
   const start = performance.now();
   
   // MOCK MODE Interception
   if (model.includes('mock-') || !process.env.API_KEY) {
-     await new Promise(resolve => setTimeout(resolve, 1500));
+     if (onProgress) onProgress("Simulating review analysis...");
+     await sleep(1500);
      
      const suggestions: ReviewSuggestion[] = [];
      
@@ -66,86 +84,122 @@ export const runReviewLoop = async (
      return suggestions;
   }
 
-  // REAL API MODE
+  // REAL API MODE - BATCHED PROCESSING
   const ai = getAI();
-  if (!ai) {
-     // Fallback if no AI instance (should be caught by mock check above, but safe-guard)
-     return [];
+  if (!ai) return [];
+
+  const BATCH_SIZE = 4;
+  const slides = runDoc.slides;
+  const outline = runDoc.outline;
+  const totalSlides = slides.length;
+  const allSuggestions: ReviewSuggestion[] = [];
+
+  // Create chunks
+  const chunks = [];
+  for (let i = 0; i < totalSlides; i += BATCH_SIZE) {
+     chunks.push({
+        start: i,
+        end: Math.min(i + BATCH_SIZE, totalSlides),
+        slides: slides.slice(i, i + BATCH_SIZE),
+        outline: outline.slice(i, i + BATCH_SIZE)
+     });
   }
 
-  try {
-    const response = await ai.models.generateContent({
-      model: model,
-      contents: Prompts.Reviewer(runDoc.outline, runDoc.slides, runDoc.asset_library, runDoc.branding),
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-             actions: {
-                type: Type.ARRAY,
-                items: {
-                   type: Type.OBJECT,
-                   properties: {
-                      description: { type: Type.STRING },
-                      action: {
-                         type: Type.OBJECT,
-                         properties: {
-                            type: { type: Type.STRING },
-                            payload: { 
-                               type: Type.OBJECT,
-                               properties: {
-                                  slideId: { type: Type.STRING },
-                                  variantId: { type: Type.STRING },
-                                  field: { type: Type.STRING },
-                                  value: { type: Type.STRING },
-                                  zoneId: { type: Type.STRING },
-                                  assetId: { type: Type.STRING },
-                                  scale: { type: Type.NUMBER },
-                                  alignment: { type: Type.STRING },
-                                  size: { type: Type.NUMBER },
-                                  transform: {
-                                     type: Type.OBJECT,
-                                     properties: {
-                                        x: { type: Type.NUMBER },
-                                        y: { type: Type.NUMBER },
-                                        w: { type: Type.NUMBER },
-                                        h: { type: Type.NUMBER }
-                                     }
-                                  }
-                               }
-                            }
-                         },
-                         required: ["type", "payload"]
-                      }
-                   },
-                   required: ["description", "action"]
-                }
-             }
-          }
+  for (let i = 0; i < chunks.length; i++) {
+     const chunk = chunks[i];
+     const batchLabel = `${chunk.start + 1}-${chunk.end}`;
+     
+     if (onProgress) onProgress(`Analysing slides ${batchLabel} of ${totalSlides}...`);
+
+     let attempt = 0;
+     const maxRetries = 3;
+     let batchSuccess = false;
+
+     while (!batchSuccess && attempt < maxRetries) {
+        try {
+           const batchStart = performance.now();
+           const response = await ai.models.generateContent({
+              model: model,
+              // We pass only the chunk's outline and slides to the prompt to keep context small
+              contents: Prompts.Reviewer(chunk.outline, chunk.slides, runDoc.asset_library, runDoc.branding),
+              config: {
+                 responseMimeType: "application/json",
+                 responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                       actions: {
+                          type: Type.ARRAY,
+                          items: {
+                             type: Type.OBJECT,
+                             properties: {
+                                description: { type: Type.STRING },
+                                action: {
+                                   type: Type.OBJECT,
+                                   properties: {
+                                      type: { type: Type.STRING },
+                                      payload: { 
+                                         type: Type.OBJECT,
+                                         properties: {
+                                            slideId: { type: Type.STRING },
+                                            variantId: { type: Type.STRING },
+                                            field: { type: Type.STRING },
+                                            value: { type: Type.STRING },
+                                            zoneId: { type: Type.STRING },
+                                            assetId: { type: Type.STRING },
+                                            scale: { type: Type.NUMBER },
+                                            alignment: { type: Type.STRING },
+                                            size: { type: Type.NUMBER },
+                                            transform: {
+                                               type: Type.OBJECT,
+                                               properties: {
+                                                  x: { type: Type.NUMBER },
+                                                  y: { type: Type.NUMBER },
+                                                  w: { type: Type.NUMBER },
+                                                  h: { type: Type.NUMBER }
+                                               }
+                                            }
+                                         }
+                                      }
+                                   },
+                                   required: ["type", "payload"]
+                                }
+                             },
+                             required: ["description", "action"]
+                          }
+                       }
+                    }
+                 }
+              }
+           });
+
+           if (response.text) {
+              const parsed = JSON.parse(response.text);
+              if (parsed.actions && Array.isArray(parsed.actions)) {
+                 allSuggestions.push(...parsed.actions);
+              }
+           }
+           
+           const batchEnd = performance.now();
+           logApiCall(model, `Reviewer: Batch ${batchLabel}`, 'success', Math.round(batchEnd - batchStart));
+           batchSuccess = true;
+
+        } catch (error: any) {
+           attempt++;
+           if (isRetryableError(error) && attempt < maxRetries) {
+              console.warn(`Reviewer batch ${batchLabel} failed (Attempt ${attempt}). Retrying...`);
+              await sleep(2000 * attempt); // Exponential backoff
+           } else {
+              console.error(`Reviewer batch ${batchLabel} failed permanently.`, error);
+              logApiCall(model, `Reviewer: Batch ${batchLabel}`, 'error', 0);
+              // We break the retry loop but continue to the next batch (partial success is better than none)
+              break; 
+           }
         }
-      }
-    });
-
-    const end = performance.now();
-    logApiCall(
-        model, 
-        "Reviewer: Improvement Loop", 
-        'success', 
-        Math.round(end - start),
-        response.usageMetadata?.promptTokenCount,
-        response.usageMetadata?.candidatesTokenCount
-    );
-
-    if (!response.text) return [];
-    
-    const parsed = JSON.parse(response.text);
-    return parsed.actions || [];
-
-  } catch (error) {
-    const end = performance.now();
-    logApiCall(model, "Reviewer: Improvement Loop", 'error', Math.round(end - start));
-    console.error("Review Loop Failed", error);
-    return [];
+     }
   }
+
+  const totalEnd = performance.now();
+  logApiCall(model, "Reviewer: Total Loop", 'success', Math.round(totalEnd - start));
+  
+  return allSuggestions;
 };

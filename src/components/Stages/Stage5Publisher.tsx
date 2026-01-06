@@ -17,10 +17,11 @@ interface SelectableSuggestion {
 }
 
 const Stage5Publisher: React.FC = () => {
-  const { state, dispatch } = useRunDoc();
+  const { state, dispatch, addNotification } = useRunDoc();
   const [isExportingPDF, setIsExportingPDF] = useState(false);
   const [isExportingPPTX, setIsExportingPPTX] = useState(false);
   const [isImproving, setIsImproving] = useState(false);
+  const [improveStatus, setImproveStatus] = useState<string>("");
   
   // Anti-Churn: Track the timestamp of the last successful review
   const [lastAnalysed, setLastAnalysed] = useState<string | null>(null);
@@ -60,15 +61,33 @@ const Stage5Publisher: React.FC = () => {
 
   const handleRunImprovement = async () => {
     setIsImproving(true);
+    setImproveStatus("Warming up...");
     const currentSnapshotTime = state.last_modified;
+    
     try {
       const model = state.ai_settings.mockMode ? 'mock-gemini' : state.ai_settings?.textModel;
-      const suggestions = await runReviewLoop(state, model);
-      // Map raw suggestions to selectable state, defaulting to checked
-      setPendingSuggestions(suggestions.map(s => ({ data: s, selected: true })));
+      
+      // Pass a progress callback to receive granular updates
+      const suggestions = await runReviewLoop(state, model, (msg) => {
+         setImproveStatus(msg);
+      });
+      
+      if (suggestions.length === 0) {
+         addNotification("The Reviewer found no critical issues to fix.", "success");
+      } else {
+         // Map raw suggestions to selectable state, defaulting to checked
+         setPendingSuggestions(suggestions.map(s => ({ data: s, selected: true })));
+      }
+      
       // Mark this version as analysed so we don't re-run unless changes happen
       setLastAnalysed(currentSnapshotTime);
-    } catch (e) { console.error(e); } finally { setIsImproving(false); }
+    } catch (e) { 
+       console.error(e); 
+       addNotification("Creative Director encountered an error. Please try again.", "error");
+    } finally { 
+       setIsImproving(false); 
+       setImproveStatus("");
+    }
   };
 
   const handleApplySuggestions = () => {
@@ -145,7 +164,7 @@ const Stage5Publisher: React.FC = () => {
                   title={isUpToDate ? "No changes detected since last review" : "Run AI Creative Director"}
                >
                   {isImproving ? <Loader2 className="animate-spin" size={20} /> : isUpToDate ? <CheckCircle2 size={20} /> : <Bot size={20} />} 
-                  {isUpToDate ? 'Reviewed' : 'Auto-Improve'}
+                  {isImproving ? improveStatus || 'Analysing...' : isUpToDate ? 'Reviewed' : 'Auto-Improve'}
                </button>
                <button onClick={handleFinalizeClick} className="px-6 py-2.5 bg-green-600 hover:bg-green-500 text-white rounded font-bold transition-all flex items-center gap-2 shadow-lg">
                   <CheckCircle2 size={20} /> Finalise Project

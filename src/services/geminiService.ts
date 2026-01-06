@@ -162,13 +162,17 @@ const mockConcepts = (outline: OutlineItem[]): ImageConcept[] => {
 
 // --- END MOCK DATA ---
 
-// Helper: Check if error is retryable (503 Service Unavailable or Overloaded)
+// Helper: Check if error is retryable (503 Service Unavailable, Overloaded, or 500 Internal)
 const isRetryableError = (error: any) => {
   const msg = (error.message || JSON.stringify(error)).toLowerCase();
-  if (msg.includes('503') || msg.includes('overloaded') || msg.includes('internal server error')) {
-    return true;
-  }
-  return false;
+  return (
+    msg.includes('503') || 
+    msg.includes('overloaded') || 
+    msg.includes('internal server error') ||
+    msg.includes('internal error') ||
+    msg.includes('"code":500') ||
+    msg.includes('"status":"internal"')
+  );
 };
 
 // Helper: Check if error is a quota limit (429 or Resource Exhausted)
