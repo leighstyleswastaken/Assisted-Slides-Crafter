@@ -1,0 +1,5 @@
+{
+  "name": "Assisted Slides Crafter",
+  "description": "A glass-box AI slide generator following a strict 5-stage pipeline: Strategist, Art Dept, Architect, Copywriter, and Publisher. Features a deterministic state machine and high-fidelity PDF export.",
+  "requestFramePermissions": []
+}
