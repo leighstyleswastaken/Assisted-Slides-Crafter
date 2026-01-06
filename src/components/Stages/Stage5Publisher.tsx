@@ -307,7 +307,7 @@ const Stage5Publisher: React.FC = () => {
             </div>
          </div>
       )}
-    </Stage5Publisher>
+    </StageScaffold>
   );
 };
 
