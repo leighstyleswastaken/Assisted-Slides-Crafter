@@ -1,5 +1,6 @@
+
 import React, { useState, useRef } from 'react';
-import { Palette, AlertCircle, Loader2, Layers, Trash2, CheckCircle2, Heart, Eraser, RotateCw, RefreshCw, CheckCheck, Archive, Wand2, Sparkles, CopyPlus, Maximize2, Download, RotateCcw, Droplet, X, Upload, Image, Box, FileImage } from 'lucide-react';
+import { Palette, AlertCircle, Loader2, Layers, Trash2, CheckCircle2, Heart, Eraser, RotateCw, RefreshCw, CheckCheck, Archive, Wand2, Sparkles, CopyPlus, Maximize2, Download, RotateCcw, Droplet, X, Upload, Image, Box, FileImage, Bot } from 'lucide-react';
 import { Asset, AssetKind } from '../../../types';
 import JSZip from 'jszip';
 // @ts-ignore
@@ -58,6 +59,13 @@ const AssetDetailModal: React.FC<AssetDetailModalProps> = ({ asset, onClose, onD
                      <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Linked Slide</label>
                      <p className="text-sm text-gray-400 font-mono">{asset.linked_slide_id || 'N/A'}</p>
                   </div>
+                  
+                  {asset.tags && asset.tags.includes('reviewer_generated') && (
+                     <div className="bg-purple-900/20 border border-purple-500/30 p-3 rounded text-xs text-purple-200 flex items-center gap-2">
+                        <Bot size={16}/>
+                        <span>Commissioned by AI Reviewer during final polish.</span>
+                     </div>
+                  )}
                </div>
 
                <div className="mt-6 pt-6 border-t border-gray-800 space-y-3">
@@ -486,10 +494,18 @@ const AssetGallery: React.FC<Props> = ({
                             </div>
                         )}
                      </div>
+                     
+                     {/* Reviewer Badge */}
+                     {asset.tags && asset.tags.includes('reviewer_generated') && (
+                        <div className="absolute top-2 left-2 z-20 bg-purple-600 text-white p-1 rounded-full shadow-lg" title="Created by Reviewer">
+                           <Bot size={12} />
+                        </div>
+                     )}
 
                      {/* Overlay Controls */}
                      <div className="absolute inset-0 z-20 bg-gray-950/90 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-2 pointer-events-none">
-                        <div className="flex justify-between items-start pointer-events-auto">
+                        <div className="flex justify-between items-start pointer-events-auto pl-6"> 
+                           {/* Padding added for the badge space */}
                            <div className="flex gap-1">
                               <span className="text-[10px] font-mono bg-black/50 px-1.5 py-0.5 rounded text-white">{asset.kind}</span>
                               {asset.transparent && <span className="text-[10px] font-mono bg-blue-900/80 text-blue-200 px-1.5 py-0.5 rounded flex items-center gap-1"><Layers size={8}/> PNG</span>}

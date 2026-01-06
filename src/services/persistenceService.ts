@@ -1,4 +1,5 @@
-import { get, set } from 'idb-keyval';
+
+import { get, set, del } from 'idb-keyval';
 import { RunDoc } from '../types';
 import { validateRunDoc } from './validationService';
 
@@ -30,5 +31,14 @@ export const loadProject = async (): Promise<RunDoc | null> => {
   } catch (error) {
     console.error('Failed to load project from IndexedDB:', error);
     return null;
+  }
+};
+
+export const clearProject = async (): Promise<void> => {
+  try {
+    await del(DB_KEY);
+    console.log('Project cleared from IndexedDB');
+  } catch (error) {
+    console.error('Failed to clear project:', error);
   }
 };

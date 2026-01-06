@@ -23,6 +23,7 @@ This document serves as the source of truth for all implemented features to prev
 - [x] **Library Management**: Keep/Discard logic, ZIP export, and manual image import/classification.
 - [x] **Hi-Fi Mock Engine**: Programmatic emoji-based asset generation for offline/quota-exhausted testing.
 - [x] **Image Compression**: Automatic WebP conversion (0.8 quality) to reduce memory footprint.
+- [x] **Reviewer Integration**: Visually tagged assets commissioned by the Stage 5 reviewer.
 
 ## 03. Architect (Structural Composition)
 - [x] **3x3 Cardinal Grid**: Precision placement system for stamps and motifs.
@@ -46,6 +47,8 @@ This document serves as the source of truth for all implemented features to prev
 - [x] **Post-Processing Polish**: Global filters for Film Grain (noise) and Vignette effects.
 - [x] **AI Reviewer Loop**: Final quality check that issues "Repair Actions" (text rewrites or layout tweaks).
     - [x] **Anti-Churn**: Change detection prevents the reviewer from re-analyzing identical states.
+    - [x] **Asset Commissioning**: Capability to request and generate new assets if gaps are found.
+    - [x] **Event Logging**: Persistent history of all AI interventions for audit trails.
 - [x] **High-Res PDF Export**: DOM-capture system that preserves Google Fonts and CSS effects.
 - [x] **PPTX Export**: Native PowerPoint generation with precision coordinate mapping.
     - [x] **Style Parity**: Respects state-driven Bold, Italic, and browser-measured Font Size.
@@ -61,3 +64,4 @@ This document serves as the source of truth for all implemented features to prev
 - [x] **Mock Mode**: Seamless offline development with simulated AI responses.
 - [x] **Safe Demo Deployment**: Automatic fallback to Mock Mode if API Keys are missing in production.
 - [x] **Rich Template Library**: Dedicated starter decks for various use cases (Startup, Education, Status).
+- [x] **Commission History**: Explicit logging of AI-generated assets with visual tagging in gallery.

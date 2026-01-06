@@ -196,4 +196,5 @@ export type Action =
   | { type: 'APPROVE_PROJECT' }
   | { type: 'UNDO' }
   | { type: 'REDO' }
+  | { type: 'LOG_EVENT'; payload: { type: string, detail: any, timestamp?: string } }
   | { type: 'BATCH_ACTIONS'; payload: Action[] };

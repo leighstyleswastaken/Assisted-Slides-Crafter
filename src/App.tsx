@@ -1,8 +1,7 @@
 
 import React from 'react';
 import { DndProvider } from 'react-dnd';
-import { MultiBackend } from 'react-dnd-multi-backend';
-import { HTML5toTouch } from 'rdndmb-html5-to-touch';
+import { HTML5Backend } from 'react-dnd-html5-backend';
 import { RunDocProvider } from './context/RunDocContext';
 import AppShell from './components/Layout/AppShell';
 import ErrorBoundary from './components/UI/ErrorBoundary';
@@ -11,8 +10,8 @@ const App: React.FC = () => {
   return (
     <ErrorBoundary>
       <RunDocProvider>
-        {/* Switched to MultiBackend to support Touch devices (Mobile/Tablet) automatically */}
-        <DndProvider backend={MultiBackend} options={HTML5toTouch}>
+        {/* Using HTML5Backend to ensure stability and avoid MultiBackend import issues */}
+        <DndProvider backend={HTML5Backend}>
           <AppShell />
         </DndProvider>
       </RunDocProvider>

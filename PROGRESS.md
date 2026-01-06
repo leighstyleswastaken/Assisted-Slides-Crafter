@@ -16,6 +16,7 @@
 - [x] Outline Editor (Reorder/Add/Delete slides)
 - [x] Stage Approval Action
 - [x] **Feature: Presentation Type Selection**
+- [x] **Feature: Smart Background Inheritance for New Slides**
 
 ## Phase 3: Stage 2 - Art Dept (Completed)
 - [x] Parallel Asset Generation Job System
@@ -24,6 +25,7 @@
 - [x] **Feature: Manual Image Import & Classification**
 - [x] Bulk Regenerate (Branding Diff)
 - [x] **Optimization: Image Compression (WebP)**
+- [x] **Feature: Reviewer Commission Badge in Gallery**
 
 ## Phase 4: Stage 3 - Architect (Completed)
 - [x] Slide Initialization (from Outline)
@@ -48,9 +50,14 @@
 - [x] PDF Export (High-fidelity capture parity)
 - [x] PPTX Export (Precision positioning)
 - [x] **Feature: AI Reviewer/Creative Director Loop**
+    - [x] Text & Layout Tweaks
+    - [x] Asset Commissioning Protocol
+    - [x] **Feature: Persistent History Tracking (LOG_EVENT)**
 - [x] **Feature: PPTX Font and Style Parity (Bold/Italic/Size)**
 - [x] **Feature: Refactored Modular PPTX Engine with Documentation**
 - [x] **Feature: Lazy Loading & Rendering Performance**
+- [x] **Optimization: Parallel Review Execution (Turbo Mode)**
+- [x] **Feature: Live Review Timer**
 
 ## Phase 7: Precision & DX (Completed)
 - [x] Style Clipboard (Copy/Paste Box Settings)

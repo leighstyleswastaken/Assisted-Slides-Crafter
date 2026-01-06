@@ -1,3 +1,4 @@
+
 # Architecture
 
 Assisted Slides Crafter implements a "Glass Box" architecture designed to build trust by making every AI decision visible and editable.
@@ -22,6 +23,7 @@ The Application Shell provides the interface for the user to interact with the T
 - We achieve this by sharing the `CompositeCanvas` and `SlideRenderer` logic (or keeping CSS properties identical) across stages.
 
 ## Stability & Safety
+- **Schema-First Engineering**: To prevent AI hallucinations (e.g., inventing asset IDs or infinite text loops), all complex agents must rely on **Strict JSON Schemas** defined in the API call, supplemented by **TypeScript Interface Context** in the prompt.
 - **Schema Validation**: `validationService.ts` ensures that even if the AI outputs malformed JSON, or if a save file is corrupted, the app won't crash silently.
 - **Local Persistence**: IndexedDB ensures work is not lost on refresh, which is critical for a multi-step creative process.
 - **YOLO Interrupt**: The automated pipeline runs in a discrete async service that checks a mutable ref (`YoloControl`) at every major step, ensuring the user can pull the plug or pause execution instantly.

@@ -1,15 +1,21 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useRunDoc } from '../../context/RunDocContext';
-import { Stage, Action, StageStatus } from '../../types';
+import { Stage, Action, StageStatus, Asset, AssetKind } from '../../types';
 import { SlideSurface } from '../Renderer/SlideSurface';
-import { FileDown, Loader2, Printer, Presentation, Bot, Sparkles, AlertTriangle, ExternalLink, Info, CheckCircle2, Unlock, CheckSquare, Square, RefreshCw } from 'lucide-react';
+import { FileDown, Loader2, Presentation, Bot, CheckCircle2, Unlock, Bug, Gauge } from 'lucide-react';
 import { generatePPTX } from '../../services/pptxService';
 import { generatePDF } from '../../services/pdfService';
 import { runReviewLoop, ReviewSuggestion } from '../../services/reviewerService';
+import { generateAssetImage } from '../../services/geminiService';
+import { removeBackgroundAI, removeBackgroundColorKey, compressImage } from '../../services/imageProcessingService';
 import ConfirmModal from '../UI/ConfirmModal';
 import { StageScaffold } from '../Layout/StageScaffold';
 import { STAGE_NAMES } from '../../constants';
+
+// Sub-components
+import ReviewModal from './Publisher/ReviewModal';
+import PublisherSidebar from './Publisher/PublisherSidebar';
 
 interface SelectableSuggestion {
   data: ReviewSuggestion;
@@ -21,7 +27,12 @@ const Stage5Publisher: React.FC = () => {
   const [isExportingPDF, setIsExportingPDF] = useState(false);
   const [isExportingPPTX, setIsExportingPPTX] = useState(false);
   const [isImproving, setIsImproving] = useState(false);
-  const [improveStatus, setImproveStatus] = useState<string>("");
+  const [isApplyingFixes, setIsApplyingFixes] = useState(false);
+  const [, setImproveStatus] = useState<string>("");
+  
+  // Timer State
+  const [elapsedTime, setElapsedTime] = useState(0);
+  const timerRef = useRef<number | null>(null);
   
   // Anti-Churn: Track the timestamp of the last successful review
   const [lastAnalysed, setLastAnalysed] = useState<string | null>(null);
@@ -30,20 +41,46 @@ const Stage5Publisher: React.FC = () => {
   // State for Reviewer Suggestions (Wrapped with selection state)
   const [pendingSuggestions, setPendingSuggestions] = useState<SelectableSuggestion[]>([]);
   
+  // State for Debugging failed JSON
+  const [failedResponseLog, setFailedResponseLog] = useState<string>("");
+  
   const [polish, setPolish] = useState({ noise: false, vignette: false });
   const [showFinaliseConfirm, setShowFinaliseConfirm] = useState<string[] | null>(null);
+  
+  // Explicitly allow overriding the model for review to Ensure 'Pro' quality
+  const [useProModel, setUseProModel] = useState(true);
+  const [concurrency, setConcurrency] = useState(1);
 
   const isApproved = state.stage_status[Stage.Publisher] === StageStatus.Approved;
   const isDraft = !isApproved;
 
   // Effect: When we apply AI fixes, we consider the RESULTING state as "Analysed" (Clean)
-  // so the user isn't prompted to re-run AI on the AI's own work immediately.
   useEffect(() => {
-    if (applyingFixes.current) {
+    if (applyingFixes.current && !isApplyingFixes) {
        setLastAnalysed(state.last_modified);
        applyingFixes.current = false;
     }
-  }, [state.last_modified]);
+  }, [state.last_modified, isApplyingFixes]);
+
+  // Timer Effect
+  useEffect(() => {
+    if (isImproving) {
+      setElapsedTime(0);
+      const start = Date.now();
+      timerRef.current = window.setInterval(() => {
+        setElapsedTime(Math.floor((Date.now() - start) / 1000));
+      }, 1000);
+    } else {
+      if (timerRef.current) clearInterval(timerRef.current);
+    }
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [isImproving]);
+
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
 
   const getExportFilename = (ext: string) => {
      return `${state.project_id}${isDraft ? '_draft' : ''}_Deck.${ext}`;
@@ -59,27 +96,47 @@ const Stage5Publisher: React.FC = () => {
     try { await generatePPTX(state, getExportFilename('pptx')); } catch (e) { console.error(e); } finally { setIsExportingPPTX(false); }
   };
 
+  const handleDownloadDebugLog = () => {
+     const blob = new Blob([failedResponseLog], { type: 'text/plain' });
+     const url = URL.createObjectURL(blob);
+     const a = document.createElement('a');
+     a.href = url;
+     a.download = `asc_debug_log_${Date.now()}.txt`;
+     document.body.appendChild(a);
+     a.click();
+     document.body.removeChild(a);
+     URL.revokeObjectURL(url);
+  };
+
   const handleRunImprovement = async () => {
     setIsImproving(true);
     setImproveStatus("Warming up...");
+    setFailedResponseLog(""); // Clear previous logs
     const currentSnapshotTime = state.last_modified;
     
     try {
-      const model = state.ai_settings.mockMode ? 'mock-gemini' : state.ai_settings?.textModel;
+      let model = state.ai_settings?.textModel;
       
-      // Pass a progress callback to receive granular updates
-      const suggestions = await runReviewLoop(state, model, (msg) => {
-         setImproveStatus(msg);
-      });
+      if (state.ai_settings.mockMode) {
+         model = 'mock-gemini';
+      } else if (useProModel) {
+         model = 'gemini-3-pro-preview';
+      }
+      
+      const suggestions = await runReviewLoop(
+         state, 
+         model, 
+         concurrency, 
+         (msg) => setImproveStatus(msg),
+         (rawLog) => setFailedResponseLog(prev => prev + "\n\n" + rawLog)
+      );
       
       if (suggestions.length === 0) {
          addNotification("The Reviewer found no critical issues to fix.", "success");
       } else {
-         // Map raw suggestions to selectable state, defaulting to checked
          setPendingSuggestions(suggestions.map(s => ({ data: s, selected: true })));
       }
       
-      // Mark this version as analysed so we don't re-run unless changes happen
       setLastAnalysed(currentSnapshotTime);
     } catch (e) { 
        console.error(e); 
@@ -90,14 +147,118 @@ const Stage5Publisher: React.FC = () => {
     }
   };
 
-  const handleApplySuggestions = () => {
+  const handleApplySuggestions = async () => {
      const selected = pendingSuggestions.filter(s => s.selected);
      if (selected.length === 0) return;
      
-     const actions = selected.map(s => s.data.action);
-     applyingFixes.current = true; // Flag for the useEffect to catch the update
-     dispatch({ type: 'BATCH_ACTIONS', payload: actions });
-     setPendingSuggestions([]);
+     setIsApplyingFixes(true);
+     applyingFixes.current = true; // Flag for after-effect sync
+
+     try {
+       const simpleActions: Action[] = [];
+       const generatorRequests: any[] = [];
+
+       selected.forEach(s => {
+          if (s.data.action.type === 'REQUEST_NEW_ASSET') {
+             generatorRequests.push(s.data.action);
+          } else {
+             simpleActions.push(s.data.action);
+          }
+       });
+
+       if (simpleActions.length > 0) {
+          dispatch({ type: 'BATCH_ACTIONS', payload: simpleActions });
+          
+          simpleActions.forEach(action => {
+             const type = (action as any).type;
+             const payload = (action as any).payload;
+             
+             dispatch({
+                type: 'LOG_EVENT',
+                payload: {
+                   type: 'reviewer_fix',
+                   detail: { 
+                      action: type, 
+                      slideId: payload.slideId, 
+                      field: payload.field || payload.zoneId,
+                      value: payload.value || payload.alignment 
+                   },
+                   timestamp: new Date().toISOString()
+                }
+             });
+          });
+       }
+
+       const imageModel = state.ai_settings.mockMode ? 'mock-gemini' : state.ai_settings.imageModel;
+       
+       for (const req of generatorRequests) {
+          const { slideId, variantId, zoneId, visualPrompt, kind } = req.payload;
+          
+          try {
+             const base64 = await generateAssetImage(visualPrompt, kind, imageModel);
+             let processedUri = await compressImage(base64, 0.8, 'image/webp');
+             let isTransparent = false;
+
+             if (kind === AssetKind.Stamp) {
+                try {
+                   const noBgUri = await removeBackgroundAI(base64);
+                   processedUri = noBgUri;
+                   isTransparent = true;
+                } catch (e) {
+                   console.warn("AI removal failed during review gen, falling back to Color Key", e);
+                   try {
+                      const colorKeyUri = await removeBackgroundColorKey(base64);
+                      processedUri = colorKeyUri;
+                      isTransparent = true;
+                   } catch (e2) {
+                      console.error("All BG removal failed for review asset", e2);
+                   }
+                }
+             }
+
+             const newAssetId = `asset_review_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+             const newAsset: Asset = {
+                id: newAssetId,
+                kind: kind,
+                mime: isTransparent ? 'image/png' : 'image/webp' as any,
+                uri: processedUri,
+                original_uri: processedUri,
+                transparent: isTransparent,
+                keep: true,
+                status: 'completed',
+                prompt: visualPrompt,
+                linked_slide_id: slideId,
+                tags: [kind, 'reviewer_generated']
+             };
+             
+             dispatch({ type: 'ADD_ASSETS', payload: [newAsset] });
+
+             dispatch({ 
+                type: 'UPDATE_ZONE', 
+                payload: { slideId, variantId, zoneId, assetId: newAssetId }
+             });
+             
+             dispatch({
+                type: 'LOG_EVENT',
+                payload: {
+                   type: 'reviewer_commission',
+                   detail: { slideId, kind, prompt: visualPrompt, assetId: newAssetId },
+                   timestamp: new Date().toISOString()
+                }
+             });
+
+          } catch (genError) {
+             console.error("Failed to generate requested asset", genError);
+             addNotification(`Failed to generate asset for Slide ${slideId}`, "error");
+          }
+       }
+
+     } catch (e) {
+        console.error("Failed applying suggestions", e);
+     } finally {
+        setIsApplyingFixes(false);
+        setPendingSuggestions([]);
+     }
   };
 
   const toggleSuggestion = (index: number) => {
@@ -116,7 +277,6 @@ const Stage5Publisher: React.FC = () => {
   };
 
   const handleFinalizeClick = () => {
-     // Check for open stages
      const openStages = [1, 2, 3, 4].filter(s => state.stage_status[s as number] !== StageStatus.Approved);
      if (openStages.length > 0) {
         const names = openStages.map(s => STAGE_NAMES[s as Stage]);
@@ -131,7 +291,6 @@ const Stage5Publisher: React.FC = () => {
      setShowFinaliseConfirm(null);
   };
 
-  const selectedCount = pendingSuggestions.filter(s => s.selected).length;
   const isUpToDate = state.last_modified === lastAnalysed;
 
   return (
@@ -152,24 +311,68 @@ const Stage5Publisher: React.FC = () => {
           )}
 
           {!isApproved ? (
-             <>
+             <div className="flex items-center gap-2">
+               {/* Controls Container */}
+               <div className="flex items-center gap-2 mr-2 bg-gray-900/50 p-1 rounded-lg border border-gray-800">
+                  {/* Pro Model Toggle */}
+                  <div className="flex items-center gap-1.5 px-2 border-r border-gray-800" title="Use Gemini 3 Pro for deeper reasoning">
+                      <input 
+                        type="checkbox" 
+                        id="usePro"
+                        checked={useProModel} 
+                        onChange={(e) => setUseProModel(e.target.checked)}
+                        className="w-3.5 h-3.5 accent-purple-500 cursor-pointer"
+                      />
+                      <label htmlFor="usePro" className="text-[10px] text-gray-400 font-bold uppercase cursor-pointer select-none">Pro</label>
+                  </div>
+
+                  {/* Speed Selector */}
+                  <div className="flex items-center gap-1.5 px-1" title="Parallel Requests (Higher is faster but uses more quota)">
+                      <Gauge size={14} className="text-gray-500"/>
+                      <select 
+                        value={concurrency}
+                        onChange={(e) => setConcurrency(Number(e.target.value))}
+                        className="bg-transparent text-[10px] font-bold text-gray-300 focus:outline-none uppercase cursor-pointer"
+                      >
+                        <option value={1}>Seq</option>
+                        <option value={2}>2x</option>
+                        <option value={4}>4x</option>
+                      </select>
+                  </div>
+               </div>
+
+               {/* Failed Logs Download (Testing) */}
+               {failedResponseLog && (
+                  <button 
+                     onClick={handleDownloadDebugLog}
+                     className="px-2 py-2.5 bg-red-900/20 hover:bg-red-900/40 text-red-400 border border-red-900/50 rounded flex items-center justify-center mr-2 transition-colors"
+                     title="Download Raw Debug Logs"
+                  >
+                     <Bug size={20} />
+                  </button>
+               )}
+
                <button 
                   onClick={handleRunImprovement} 
-                  disabled={isImproving || pendingSuggestions.length > 0 || isUpToDate} 
-                  className={`px-4 py-2.5 rounded font-bold transition-all flex items-center gap-2 shadow-lg border border-transparent ${
+                  disabled={isImproving || isApplyingFixes || pendingSuggestions.length > 0 || isUpToDate} 
+                  className={`px-4 py-2.5 rounded font-bold transition-all flex items-center gap-2 shadow-lg border border-transparent min-w-[160px] justify-center ${
                      isUpToDate 
                      ? 'bg-gray-800 text-gray-600 opacity-50 cursor-not-allowed' 
                      : 'bg-gray-800 hover:bg-purple-900/30 text-gray-300 hover:border-purple-500/30'
                   }`}
-                  title={isUpToDate ? "No changes detected since last review" : "Run AI Creative Director"}
+                  title={isUpToDate ? "No changes detected since last review" : `Run AI Creative Director`}
                >
                   {isImproving ? <Loader2 className="animate-spin" size={20} /> : isUpToDate ? <CheckCircle2 size={20} /> : <Bot size={20} />} 
-                  {isImproving ? improveStatus || 'Analysing...' : isUpToDate ? 'Reviewed' : 'Auto-Improve'}
+                  {isImproving ? (
+                    <span className="flex items-center gap-2">
+                       <span className="font-mono text-xs">{formatTime(elapsedTime)}</span>
+                    </span>
+                  ) : isUpToDate ? 'Reviewed' : 'Auto-Improve'}
                </button>
                <button onClick={handleFinalizeClick} className="px-6 py-2.5 bg-green-600 hover:bg-green-500 text-white rounded font-bold transition-all flex items-center gap-2 shadow-lg">
                   <CheckCircle2 size={20} /> Finalise Project
                </button>
-             </>
+             </div>
           ) : (
             <div className="flex items-center gap-2">
                <div className="px-4 py-2 bg-gray-900 border border-green-900/50 text-green-400 rounded-full text-xs font-mono font-bold flex items-center gap-2">
@@ -196,59 +399,13 @@ const Stage5Publisher: React.FC = () => {
         </>
       }
       sidebar={
-        <div className="p-6 flex flex-col gap-6">
-          <div className="bg-gray-900 border border-gray-800 rounded p-4">
-            <h3 className="text-sm font-bold text-gray-400 uppercase mb-3 flex items-center gap-2"><Printer size={16} /> Deck Stats</h3>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between"><span className="text-gray-500">Slides</span><span className="text-white font-mono">{state.slides.length}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Assets</span><span className="text-white font-mono">{state.asset_library.filter(a => a.keep).length}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Status</span><span className={`font-mono ${isDraft ? 'text-yellow-500' : 'text-green-400'}`}>{isDraft ? 'DRAFT' : 'FINAL'}</span></div>
-            </div>
-          </div>
-
-          <div className="bg-amber-900/10 border border-amber-500/30 rounded-lg p-4">
-            <h3 className="text-[10px] font-bold text-amber-500 uppercase mb-2 flex items-center gap-2"><AlertTriangle size={14} /> PPTX Font Parity</h3>
-            <p className="text-[11px] text-amber-200/70 leading-relaxed mb-3">
-              PowerPoint requires fonts to be installed locally. For 1:1 parity, install these Google Fonts:
-            </p>
-            <div className="space-y-1 mb-4">
-              {state.branding.fonts.map(f => (
-                <div key={f} className="flex items-center justify-between bg-gray-950 px-2 py-1.5 rounded border border-gray-800">
-                  <span className="text-[10px] font-bold text-white font-mono">{f}</span>
-                  <a href={`https://fonts.google.com/specimen/${f.replace(/\s+/g, '+')}`} target="_blank" rel="noreferrer" className="text-amber-500 hover:text-white transition-colors">
-                    <ExternalLink size={12} />
-                  </a>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className={`bg-gray-900 border border-gray-800 rounded p-4 ${isApproved ? 'opacity-50 pointer-events-none grayscale' : ''}`}>
-            <h3 className="text-sm font-bold text-gray-400 uppercase mb-3 flex items-center gap-2"><Sparkles size={16} /> Final Polish</h3>
-            <div className="space-y-3">
-              <label className="flex items-center justify-between cursor-pointer group">
-                <span className="text-sm text-gray-300 group-hover:text-white">Film Grain</span>
-                <input 
-                  type="checkbox" 
-                  className="w-5 h-5 rounded accent-red-600 cursor-pointer" 
-                  checked={polish.noise} 
-                  onChange={() => setPolish(p => ({...p, noise: !p.noise}))} 
-                  disabled={isApproved}
-                />
-              </label>
-              <label className="flex items-center justify-between cursor-pointer group">
-                <span className="text-sm text-gray-300 group-hover:text-white">Vignette</span>
-                <input 
-                  type="checkbox" 
-                  className="w-5 h-5 rounded accent-red-600 cursor-pointer" 
-                  checked={polish.vignette} 
-                  onChange={() => setPolish(p => ({...p, vignette: !p.vignette}))} 
-                  disabled={isApproved}
-                />
-              </label>
-            </div>
-          </div>
-        </div>
+        <PublisherSidebar 
+          state={state} 
+          isDraft={isDraft} 
+          isApproved={isApproved} 
+          polish={polish} 
+          setPolish={setPolish} 
+        />
       }
     >
       <div className="flex-1 overflow-y-auto bg-gray-950 p-8 flex justify-center">
@@ -269,62 +426,15 @@ const Stage5Publisher: React.FC = () => {
         </div>
       </div>
       
-      {/* Review Modal */}
       {pendingSuggestions.length > 0 && (
-         <div className="fixed inset-0 z-[150] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-            <div className="bg-gray-900 border border-purple-500/50 rounded-xl p-6 max-w-lg w-full shadow-2xl transform scale-100 animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
-               <div className="flex items-center gap-3 mb-4 text-white border-b border-gray-800 pb-4">
-                  <Sparkles className="text-purple-400" size={24}/>
-                  <div>
-                     <h3 className="text-lg font-bold">Creative Director Review</h3>
-                     <p className="text-xs text-gray-400">Review and select polish items to apply.</p>
-                  </div>
-               </div>
-               
-               <div className="space-y-2 mb-6 max-h-[60vh] overflow-y-auto pr-2">
-                  {pendingSuggestions.map((item, i) => (
-                     <div 
-                        key={i} 
-                        onClick={() => toggleSuggestion(i)}
-                        className={`flex gap-3 p-3 rounded border cursor-pointer transition-all duration-200 group ${
-                           item.selected 
-                           ? 'bg-gray-900 border-purple-500/40 shadow-inner' 
-                           : 'bg-gray-950 border-gray-800 opacity-60 hover:opacity-80 hover:border-gray-700'
-                        }`}
-                     >
-                        <div className={`pt-1 transition-colors ${item.selected ? 'text-purple-400' : 'text-gray-600'}`}>
-                           {item.selected ? <CheckSquare size={18} /> : <Square size={18} />}
-                        </div>
-                        <div className="flex-1">
-                           <div className="flex justify-between items-start">
-                              <span className={`text-xs font-mono mb-1 ${item.selected ? 'text-gray-500' : 'text-gray-700'}`}>
-                                 Suggestion {String(i + 1).padStart(2, '0')}
-                              </span>
-                              <span className={`text-[9px] px-1.5 rounded uppercase font-bold tracking-wider ${item.selected ? 'bg-purple-900/30 text-purple-300' : 'bg-gray-800 text-gray-600'}`}>
-                                 {item.data.action.type.replace('UPDATE_', '').replace('_', ' ')}
-                              </span>
-                           </div>
-                           <p className={`text-sm leading-relaxed ${item.selected ? 'text-gray-200' : 'text-gray-500 line-through'}`}>
-                              {item.data.description}
-                           </p>
-                        </div>
-                     </div>
-                  ))}
-               </div>
-
-               <div className="flex justify-between items-center pt-4 border-t border-gray-800">
-                  <button onClick={() => setPendingSuggestions([])} className="px-4 py-2 text-gray-400 hover:text-white text-sm font-medium transition-colors">Discard All</button>
-                  <button 
-                     onClick={handleApplySuggestions}
-                     disabled={selectedCount === 0}
-                     className="px-6 py-2 rounded text-white text-sm font-bold shadow-lg transition-all bg-purple-600 hover:bg-purple-500 disabled:bg-gray-800 disabled:text-gray-500 disabled:shadow-none flex items-center gap-2"
-                  >
-                     <Sparkles size={14}/> 
-                     {selectedCount === 0 ? 'Select Fixes' : `Apply ${selectedCount} Fixes`}
-                  </button>
-               </div>
-            </div>
-         </div>
+         <ReviewModal 
+            suggestions={pendingSuggestions}
+            assets={state.asset_library}
+            isApplying={isApplyingFixes}
+            onToggle={toggleSuggestion}
+            onApply={handleApplySuggestions}
+            onDiscard={() => setPendingSuggestions([])}
+         />
       )}
     </StageScaffold>
   );

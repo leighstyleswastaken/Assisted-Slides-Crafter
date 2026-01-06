@@ -1,6 +1,6 @@
 
 // ... (existing imports and pushToHistory helper)
-import { RunDoc, Action, Stage, StageStatus, Slide, SlideVariant, TextLayout } from '../types';
+import { RunDoc, Action, Stage, StageStatus, Slide, SlideVariant, TextLayout, AssetKind } from '../types';
 import { INITIAL_RUN_DOC } from '../constants';
 
 const pushToHistory = (state: RunDoc): RunDoc => {
@@ -127,6 +127,38 @@ const innerReducer = (state: RunDoc, action: Action): RunDoc => {
         })
       };
     }
+    
+    // Pass-through for LOG_EVENT if called inside batch (though usually top-level)
+    case 'LOG_EVENT':
+       const event = { ...action.payload, timestamp: action.payload.timestamp || new Date().toISOString() };
+       return {
+          ...state,
+          history: {
+             ...state.history,
+             events: [...state.history.events, event]
+          }
+       };
+       
+    // Specifically handle alignment in inner reducer for batches
+    case 'UPDATE_TEXT_ALIGNMENT': {
+      const { slideId, variantId, field, alignment } = action.payload;
+      return {
+        ...state,
+        slides: state.slides.map(slide => {
+          if (slide.slide_id !== slideId) return slide;
+          return {
+            ...slide,
+            variants: slide.variants.map(variant => {
+              if (variant.variant_id !== variantId) return variant;
+              return {
+                ...variant,
+                text_alignment: { ...(variant.text_alignment || {}), [field]: alignment }
+              };
+            })
+          };
+        })
+      };
+    }
 
     default:
       return state;
@@ -141,6 +173,7 @@ export const runDocReducer = (state: RunDoc, action: Action): RunDoc => {
     let newState = { ...state };
     // Process all sub-actions on the temp state
     action.payload.forEach(subAction => {
+      // Direct call to innerReducer to handle all supported types including alignment
       newState = innerReducer(newState, subAction);
     });
     
@@ -152,16 +185,13 @@ export const runDocReducer = (state: RunDoc, action: Action): RunDoc => {
   }
 
   // Handle individual actions that map to innerReducer (but need history)
-  if (['UPDATE_TEXT_CONTENT', 'UPDATE_ZONE', 'UPDATE_ZONE_STYLE', 'UPDATE_TEXT_TRANSFORM', 'UPDATE_TEXT_FONT_SIZE'].includes(action.type)) {
+  if (['UPDATE_TEXT_CONTENT', 'UPDATE_ZONE', 'UPDATE_ZONE_STYLE', 'UPDATE_TEXT_TRANSFORM', 'UPDATE_TEXT_FONT_SIZE', 'UPDATE_TEXT_ALIGNMENT'].includes(action.type)) {
     const newState = innerReducer(state, action);
     return pushToHistory({
       ...newState,
       last_modified: lastModified
     });
   }
-
-  // Handle non-history-wrapped styling updates (if any - e.g. alignment updates were previously not pushing history in some cases, but for consistency let's look at the original file)
-  // Original file had some inconsistent history pushing. We will maintain the explicit cases below for things NOT in the "batchable" list above, or handle the rest.
 
   switch (action.type) {
     case 'REHYDRATE':
@@ -243,6 +273,13 @@ export const runDocReducer = (state: RunDoc, action: Action): RunDoc => {
 
     case 'UPDATE_OUTLINE': {
       const currentSlideIds = new Set(state.slides.map(s => s.slide_id));
+      
+      // Smart Background Logic: Find the "Content Kit" background
+      const defaultBgAsset = state.asset_library.find(
+         a => a.linked_slide_id === 'kit_content' && a.kind === AssetKind.Background
+      );
+      const defaultBgId = defaultBgAsset ? defaultBgAsset.id : '';
+
       const newSlides: Slide[] = action.payload.map(item => {
         if (currentSlideIds.has(item.slide_id)) {
           return state.slides.find(s => s.slide_id === item.slide_id)!;
@@ -254,7 +291,8 @@ export const runDocReducer = (state: RunDoc, action: Action): RunDoc => {
             {
               variant_id: 'v1',
               label: 'Default Variant',
-              zones: { background: { asset_id: '' } },
+              // Apply the default background automatically
+              zones: { background: { asset_id: defaultBgId } },
               text_layout: item.suggest_text_layout || TextLayout.HeadlineBody,
               text_content: { headline: item.title, body: item.intent },
               text_bold: { headline: true }, 
@@ -320,8 +358,6 @@ export const runDocReducer = (state: RunDoc, action: Action): RunDoc => {
         last_modified: lastModified
       };
 
-    // Note: UPDATE_ZONE and UPDATE_ZONE_STYLE are handled by innerReducer/batch logic above if called individually or in batch.
-    
     case 'REPLACE_ZONES': {
       const { slideId, variantId, zones } = action.payload;
       return pushToHistory({
@@ -391,8 +427,6 @@ export const runDocReducer = (state: RunDoc, action: Action): RunDoc => {
         last_modified: lastModified
       });
 
-    // UPDATE_TEXT_CONTENT and UPDATE_TEXT_TRANSFORM handled by innerReducer logic above
-
     case 'UPDATE_TEXT_ALIGNMENT': {
       const { slideId, variantId, field, alignment } = action.payload;
       return {
@@ -455,8 +489,6 @@ export const runDocReducer = (state: RunDoc, action: Action): RunDoc => {
         last_modified: lastModified
       };
     }
-
-    // UPDATE_TEXT_FONT_SIZE handled by innerReducer logic above
 
     case 'TOGGLE_TEXT_BOLD': {
       const { slideId, variantId, field } = action.payload;
@@ -530,6 +562,17 @@ export const runDocReducer = (state: RunDoc, action: Action): RunDoc => {
         redoStack: newRedoStack
       };
     }
+    
+    case 'LOG_EVENT':
+       const event = { ...action.payload, timestamp: action.payload.timestamp || new Date().toISOString() };
+       return {
+          ...state,
+          history: {
+             ...state.history,
+             events: [...state.history.events, event]
+          },
+          last_modified: lastModified
+       };
 
     default:
       return state;

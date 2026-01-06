@@ -16,18 +16,29 @@ export const blobToBase64 = (blob: Blob): Promise<string> => {
  * @param base64Str Source image
  * @param quality 0.0 - 1.0 (default 0.8)
  * @param mimeType Target format (default image/webp)
+ * @param maxWidth Max dimension to downscale to (default 1920)
  */
-export const compressImage = (base64Str: string, quality = 0.8, mimeType = 'image/webp'): Promise<string> => {
+export const compressImage = (base64Str: string, quality = 0.8, mimeType = 'image/webp', maxWidth = 1920): Promise<string> => {
   return new Promise((resolve) => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.src = base64Str;
     
     img.onload = () => {
+      let width = img.width;
+      let height = img.height;
+
+      // Scale down if too large to save memory/storage
+      if (width > maxWidth) {
+        const scale = maxWidth / width;
+        width = maxWidth;
+        height = Math.round(height * scale);
+      }
+
       // Create offscreen canvas
       const canvas = document.createElement('canvas');
-      canvas.width = img.width;
-      canvas.height = img.height;
+      canvas.width = width;
+      canvas.height = height;
       const ctx = canvas.getContext('2d');
       
       if (!ctx) {
@@ -37,7 +48,7 @@ export const compressImage = (base64Str: string, quality = 0.8, mimeType = 'imag
         return;
       }
       
-      ctx.drawImage(img, 0, 0);
+      ctx.drawImage(img, 0, 0, width, height);
       
       try {
         // Convert to optimized format

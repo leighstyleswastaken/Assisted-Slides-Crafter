@@ -10,16 +10,11 @@ interface State {
   error: Error | null;
 }
 
-// Fixed: Explicitly extending React.Component to resolve property errors for setState and props
 class ErrorBoundary extends React.Component<Props, State> {
-  // Fixed: Initializing state within the constructor to ensure it's correctly linked to the component instance
-  constructor(props: Props) {
-    super(props);
-    this.state = {
-      hasError: false,
-      error: null,
-    };
-  }
+  public state: State = {
+    hasError: false,
+    error: null,
+  };
 
   static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error };
@@ -34,7 +29,6 @@ class ErrorBoundary extends React.Component<Props, State> {
   };
 
   handleReset = () => {
-    // Fixed: Correctly accessing the inherited setState method from React.Component
     this.setState({ hasError: false, error: null });
   };
 
@@ -74,7 +68,6 @@ class ErrorBoundary extends React.Component<Props, State> {
       );
     }
 
-    // Fixed: Correctly accessing the inherited props from React.Component
     return this.props.children;
   }
 }

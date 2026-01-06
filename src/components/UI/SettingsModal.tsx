@@ -1,9 +1,16 @@
+
 import React, { useRef, useState, useCallback } from 'react';
 import { useRunDoc } from '../../context/RunDocContext';
 import { validateRunDoc } from '../../services/validationService';
-import { saveProject } from '../../services/persistenceService';
+import { saveProject, clearProject } from '../../services/persistenceService';
 import { TEMPLATES } from '../../templates';
-import { X, Save, Upload, Sliders, FileJson, Trash2, Loader2, AlertTriangle, CheckCircle, Tag, PlusSquare, LayoutTemplate, ToggleLeft, ToggleRight, Sparkles } from 'lucide-react';
+import { X, Save, Upload, Sliders, FileJson, Trash2, Loader2, AlertTriangle, CheckCircle, Tag, PlusSquare, LayoutTemplate, ToggleLeft, ToggleRight, Sparkles, RefreshCw, Archive, Package } from 'lucide-react';
+import JSZip from 'jszip';
+// @ts-ignore
+import FileSaver from 'file-saver';
+
+// Handle CDN export discrepancies for file-saver
+const saveAs = (FileSaver && FileSaver.saveAs) ? FileSaver.saveAs : FileSaver;
 
 interface Props {
   onClose: () => void;
@@ -27,8 +34,12 @@ const SettingsModal: React.FC<Props> = ({ onClose }) => {
   const [importError, setImportError] = useState<string | null>(null);
   const [loadSuccess, setLoadSuccess] = useState(false);
 
+  // Export State
+  const [isZipping, setIsZipping] = useState(false);
+
   // Reset State
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [showFactoryResetConfirm, setShowFactoryResetConfirm] = useState(false);
 
   const handleExport = () => {
     // CRITICAL: Strip history stacks to prevent massive file bloat
@@ -50,6 +61,71 @@ const SettingsModal: React.FC<Props> = ({ onClose }) => {
     document.body.appendChild(downloadAnchorNode);
     downloadAnchorNode.click();
     downloadAnchorNode.remove();
+  };
+
+  const handleExportArchive = async () => {
+    setIsZipping(true);
+    try {
+        const zip = new JSZip();
+        
+        // 1. Prepare State Copy (Strip ephemeral stacks)
+        const { undoStack, redoStack, ...fullState } = state;
+        
+        // 2. Separate Change Log
+        const changeLog = fullState.history;
+        
+        // 3. Prepare Project Data (Without History, will process assets next)
+        const projectData = { ...fullState, history: { events: [] } };
+        
+        // 4. Process Assets (Extract base64 to files)
+        const assetsFolder = zip.folder("assets");
+        const leanAssets = projectData.asset_library.map(asset => {
+            // Only extract if it's a data URI (base64)
+            if (asset.uri && asset.uri.startsWith('data:image')) {
+                const parts = asset.uri.split(',');
+                const meta = parts[0]; // e.g., data:image/png;base64
+                const data = parts[1];
+                
+                // Determine extension
+                let ext = 'png';
+                if (meta.includes('jpeg')) ext = 'jpg';
+                else if (meta.includes('webp')) ext = 'webp';
+                
+                const filename = `${asset.id}.${ext}`;
+                if (assetsFolder && data) {
+                    assetsFolder.file(filename, data, { base64: true });
+                }
+                
+                // Return asset with relative path reference instead of heavy base64
+                return {
+                    ...asset,
+                    uri: `assets/${filename}`,
+                    original_uri: asset.original_uri && asset.original_uri.startsWith('data:image') 
+                        ? `assets/${asset.id}_original.${ext}` // Note: We aren't saving original separately to save space/time for now unless needed
+                        : asset.original_uri
+                };
+            }
+            return asset;
+        });
+        
+        // Update the project data with the lean assets
+        projectData.asset_library = leanAssets;
+
+        // 5. Add files to Zip
+        zip.file("project_data.json", JSON.stringify(projectData, null, 2));
+        zip.file("change_log.json", JSON.stringify(changeLog, null, 2));
+        zip.file("README.txt", "Assisted Slides Crafter Project Archive\n\n- project_data.json: Core project state with lightweight asset references.\n- change_log.json: Full history of AI interactions and edits.\n- assets/: Folder containing all image files.");
+        
+        // 6. Generate and Save
+        const content = await zip.generateAsync({ type: "blob" });
+        saveAs(content, `asc_project_${state.project_id}_archive.zip`);
+        
+    } catch (e) {
+        console.error("Archive export failed", e);
+        alert("Failed to create archive. See console for details.");
+    } finally {
+        setIsZipping(false);
+    }
   };
 
   // --- Project ID Handler ---
@@ -179,6 +255,12 @@ const SettingsModal: React.FC<Props> = ({ onClose }) => {
      setShowResetConfirm(false);
      onClose();
   };
+
+  const handleFactoryReset = async () => {
+     await clearProject();
+     localStorage.clear();
+     window.location.reload();
+  };
   
   const handleLoadTemplate = (template: any) => {
      const hasWork = state.revisions.source > 0 || state.outline.length > 0 || state.asset_library.length > 0;
@@ -275,9 +357,13 @@ const SettingsModal: React.FC<Props> = ({ onClose }) => {
                         className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-sm text-white focus:outline-none focus:border-blue-500"
                         disabled={state.ai_settings?.mockMode}
                         >
-                            <option value="gemini-3-flash-preview">Gemini 3 Flash (Fast)</option>
-                            <option value="gemini-3-pro-preview">Gemini 3 Pro (Smart)</option>
+                            <option value="gemini-3-flash-preview">Gemini 3 Flash (Fast & Recommended)</option>
+                            <option value="gemini-3-pro-preview">Gemini 3 Pro (Complex Reasoning)</option>
+                            <option value="gemini-flash-latest">Gemini Flash (Latest)</option>
+                            <option value="gemini-flash-lite-latest">Gemini Flash Lite (Fastest)</option>
+                            <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
                         </select>
+                        <p className="text-[10px] text-gray-500">Controls Branding, Outline, Copy, and Layout Strategy.</p>
                     </div>
 
                     <div className="space-y-1">
@@ -288,9 +374,10 @@ const SettingsModal: React.FC<Props> = ({ onClose }) => {
                         className="w-full bg-gray-800 border border-gray-700 rounded p-2 text-sm text-white focus:outline-none focus:border-blue-500"
                         disabled={state.ai_settings?.mockMode}
                         >
-                            <option value="gemini-2.5-flash-image">Gemini 2.5 Flash Image (Fast)</option>
+                            <option value="gemini-2.5-flash-image">Gemini 2.5 Flash Image (Fast & Efficient)</option>
                             <option value="gemini-3-pro-image-preview">Gemini 3 Pro Image (High Quality)</option>
                         </select>
+                        <p className="text-[10px] text-gray-500">Controls Asset Generation in Art Dept.</p>
                     </div>
                     
                     {state.ai_settings?.mockMode && (
@@ -330,16 +417,31 @@ const SettingsModal: React.FC<Props> = ({ onClose }) => {
              <div className="space-y-6">
                 <div className="flex justify-between items-center">
                     <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Project Data</h3>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <button 
                         onClick={handleExport}
-                        className="text-xs flex items-center gap-2 text-blue-400 hover:text-blue-300"
+                        className="flex flex-col items-center justify-center p-6 bg-gray-800 hover:bg-gray-750 border border-gray-700 hover:border-blue-500/50 rounded-xl transition-all group text-left"
                     >
-                        <Save size={14} /> Export JSON
+                        <FileJson size={32} className="text-blue-400 mb-3 group-hover:scale-110 transition-transform" />
+                        <span className="font-bold text-white text-sm">Export JSON</span>
+                        <span className="text-xs text-gray-500 mt-1">Single file. Best for backups.</span>
+                    </button>
+
+                    <button 
+                        onClick={handleExportArchive}
+                        disabled={isZipping}
+                        className="flex flex-col items-center justify-center p-6 bg-gray-800 hover:bg-gray-750 border border-gray-700 hover:border-green-500/50 rounded-xl transition-all group text-left disabled:opacity-50"
+                    >
+                        {isZipping ? <Loader2 size={32} className="animate-spin text-green-400 mb-3"/> : <Package size={32} className="text-green-400 mb-3 group-hover:scale-110 transition-transform" />}
+                        <span className="font-bold text-white text-sm">Export Archive (Zip)</span>
+                        <span className="text-xs text-gray-500 mt-1 text-center">Separates Images, Text, & Logs.<br/>Best for developer analysis.</span>
                     </button>
                 </div>
 
-                <div className="space-y-4">
-                    
+                <div className="space-y-4 border-t border-gray-800 pt-6">
+                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Import Project</h3>
                     {/* Upload Area */}
                     {!selectedFile ? (
                         <div 
@@ -417,16 +519,16 @@ const SettingsModal: React.FC<Props> = ({ onClose }) => {
                         </div>
                     )}
 
-                    {/* Start Fresh Section */}
-                    <div className="pt-6 border-t border-gray-800">
-                        <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2"><PlusSquare size={14}/> Start Fresh</h3>
+                    {/* Reset Controls */}
+                    <div className="pt-6 border-t border-gray-800 space-y-4">
+                        <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-2"><PlusSquare size={14}/> Reset Options</h3>
                         
                         {!showResetConfirm ? (
                         <button 
                             onClick={handleCreateNew}
                             className="w-full border border-dashed border-gray-600 hover:border-gray-400 text-gray-400 hover:text-white py-3 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-colors"
                         >
-                            <PlusSquare size={16} /> Create New Space
+                            <PlusSquare size={16} /> Create New Space (Clear Workspace)
                         </button>
                         ) : (
                         <div className="bg-red-900/10 border border-red-900/30 rounded-lg p-4 animate-in fade-in">
@@ -447,6 +549,34 @@ const SettingsModal: React.FC<Props> = ({ onClose }) => {
                                 </button>
                             </div>
                         </div>
+                        )}
+
+                        {!showFactoryResetConfirm ? (
+                           <button 
+                              onClick={() => setShowFactoryResetConfirm(true)}
+                              className="w-full text-red-500 hover:text-red-400 py-2 font-bold text-xs flex items-center justify-center gap-2 transition-colors"
+                           >
+                              <RefreshCw size={14}/> Application Factory Reset
+                           </button>
+                        ) : (
+                           <div className="bg-red-950 border border-red-800 rounded-lg p-4 animate-in fade-in mt-2">
+                              <h4 className="text-red-400 font-bold text-sm flex items-center gap-2 mb-2"><AlertTriangle size={16}/> Wipe Everything?</h4>
+                              <p className="text-gray-400 text-xs mb-4">This will clear all Local Storage and IndexedDB data for this domain and reload the page. This is destructive and irreversible.</p>
+                              <div className="flex gap-2">
+                                 <button 
+                                       onClick={() => setShowFactoryResetConfirm(false)}
+                                       className="flex-1 bg-gray-800 hover:bg-gray-700 text-white py-2 rounded font-bold text-xs"
+                                 >
+                                       Cancel
+                                 </button>
+                                 <button 
+                                       onClick={handleFactoryReset}
+                                       className="flex-1 bg-red-700 hover:bg-red-600 text-white py-2 rounded font-bold text-xs shadow-lg"
+                                 >
+                                       Yes, Wipe All Data
+                                 </button>
+                              </div>
+                           </div>
                         )}
                     </div>
 
