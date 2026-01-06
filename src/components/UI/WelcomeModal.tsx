@@ -1,7 +1,10 @@
-import React from 'react';
-import { Hammer, ArrowRight, Brain, Palette, Layout, PenTool, Printer, X, GraduationCap } from 'lucide-react';
+
+import React, { useRef, useState, useCallback } from 'react';
+import { Hammer, ArrowRight, Brain, Palette, Layout, PenTool, Printer, X, GraduationCap, Upload, Loader2, AlertTriangle, FileJson } from 'lucide-react';
 import { TEMPLATES } from '../../templates';
 import { useRunDoc } from '../../context/RunDocContext';
+import { validateRunDoc } from '../../services/validationService';
+import { saveProject } from '../../services/persistenceService';
 
 interface Props {
   onClose: () => void;
@@ -9,6 +12,10 @@ interface Props {
 
 const WelcomeModal: React.FC<Props> = ({ onClose }) => {
   const { dispatch } = useRunDoc();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isParsing, setIsParsing] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   const handleStartTutorial = () => {
     const tutorial = TEMPLATES.find(t => t.id === 'tutorial_mode');
@@ -17,6 +24,69 @@ const WelcomeModal: React.FC<Props> = ({ onClose }) => {
       onClose();
     }
   };
+
+  const processFile = (file: File) => {
+    if (file.type !== "application/json" && !file.name.endsWith(".json")) {
+        setImportError("Invalid file type. Please upload a .json file.");
+        return;
+    }
+
+    setIsParsing(true);
+    setImportError(null);
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+        try {
+            const jsonContent = event.target?.result as string;
+            if (!jsonContent) throw new Error("File is empty");
+            
+            const json = JSON.parse(jsonContent);
+            const { valid, errors } = validateRunDoc(json);
+
+            if (!valid) {
+                setImportError(`Structure invalid: ${errors[0]}`);
+                setIsParsing(false);
+                return;
+            }
+
+            await saveProject(json);
+            dispatch({ type: 'REHYDRATE', payload: json });
+            onClose();
+        } catch (err) {
+            console.error(err);
+            setImportError("Failed to parse JSON. File might be corrupted.");
+            setIsParsing(false);
+        }
+    };
+    reader.onerror = () => {
+        setImportError("Error reading file.");
+        setIsParsing(false);
+    };
+    reader.readAsText(file);
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) processFile(file);
+  };
+
+  const onDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  }, []);
+
+  const onDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  }, []);
+
+  const onDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      processFile(e.dataTransfer.files[0]);
+    }
+  }, []);
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 backdrop-blur-md p-4">
@@ -83,9 +153,50 @@ const WelcomeModal: React.FC<Props> = ({ onClose }) => {
                  </button>
               </div>
 
+              <div className="w-full h-px bg-gray-800"></div>
+
+              <div 
+                onDragOver={onDragOver}
+                onDragLeave={onDragLeave}
+                onDrop={onDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className={`w-full py-4 border-2 border-dashed rounded-xl flex flex-col items-center justify-center gap-2 cursor-pointer transition-all group ${
+                   isDragging 
+                   ? 'border-blue-500 bg-blue-500/10 scale-[1.02]' 
+                   : 'border-gray-700 bg-gray-800/50 hover:border-gray-500 hover:bg-gray-800'
+                }`}
+              >
+                 {isParsing ? (
+                    <Loader2 className="animate-spin text-blue-400" size={24}/>
+                 ) : (
+                    <div className="p-2 bg-gray-800 rounded-full border border-gray-700 group-hover:border-gray-600 group-hover:text-white text-gray-400 transition-colors">
+                       <FileJson size={20} />
+                    </div>
+                 )}
+                 <div className="text-center">
+                    <span className={`text-sm font-bold block ${isDragging ? 'text-blue-400' : 'text-gray-300'}`}>
+                       {isParsing ? 'Restoring Project...' : isDragging ? 'Drop to Load' : 'Load Project from JSON'}
+                    </span>
+                    {!isParsing && <span className="text-[10px] text-gray-500">Drag & Drop or Click to Browse</span>}
+                 </div>
+              </div>
+
+              <input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  onChange={handleFileSelect} 
+                  className="hidden" 
+                  accept=".json"
+              />
+              {importError && (
+                  <div className="text-red-400 text-xs text-center flex items-center justify-center gap-1 bg-red-900/20 p-2 rounded border border-red-900/50 animate-in fade-in">
+                      <AlertTriangle size={12}/> {importError}
+                  </div>
+              )}
+
               <button 
                 onClick={onClose}
-                className="w-full py-3 bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold rounded-xl transition-all border border-gray-700 flex items-center justify-center gap-2"
+                className="w-full py-3 text-gray-500 hover:text-white font-medium text-xs transition-colors flex items-center justify-center gap-1"
               >
                  Skip to Workspace
               </button>

@@ -44,6 +44,19 @@ Assisted Slides Crafter is a "glass box" slide generator that emphasizes human c
 6.  **YOLO Autopilot:** A managed automated pipeline that navigates stages for you, with Pause/Resume interruptibility.
 7.  **Strict Governance:** Approved stages are strictly read-only unless explicitly unlocked by the user.
 
+## Features & Capabilities
+
+### PWA & Offline Support
+This application is fully PWA-compliant.
+-   **Installable**: Can be installed to the home screen or desktop via the browser's "Install App" feature.
+-   **Offline Capable**: The app shell and core libraries are cached via Service Worker.
+-   **Mock Mode**: If no API key is present or the network is down, the app degrades gracefully to "Mock Mode," allowing full workflow testing without AI.
+
+### Export & Fidelity
+-   **PDF**: High-fidelity DOM capture using `html2canvas` and `jsPDF`.
+-   **PPTX**: Native PowerPoint generation.
+-   **Font Parity**: Includes a **Font Pack Generator** that downloads and zips the specific Google Fonts used in the branding so users can install them locally for perfect PowerPoint rendering.
+
 ## Deployment & Demo Mode
 
 ### Real AI Mode

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { CheckSquare, Square, X } from 'lucide-react';
 
@@ -20,13 +21,17 @@ const DEFAULT_FEATURES: FeatureItem[] = [
   { id: 'f10', label: 'YOLO Automation Mode', done: true },
   { id: 'f11', label: 'Global Undo/Redo History', done: true },
   { id: 'f12', label: 'AI Creative Director Loop', done: true },
+  { id: 'f13', label: 'Offline PWA Support', done: true },
+  { id: 'f14', label: 'Font Pack Generator', done: true },
+  { id: 'f15', label: 'JSON Project Restore', done: true },
 ];
 
 const ProgressTracker: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [features, setFeatures] = useState<FeatureItem[]>(() => {
-    const saved = localStorage.getItem('deckforge_progress_v2');
+    const saved = localStorage.getItem('deckforge_progress_v3');
     if (saved) {
       const parsed = JSON.parse(saved) as FeatureItem[];
+      // Merge defaults with saved state to catch new features
       return DEFAULT_FEATURES.map(df => {
         const existing = parsed.find(p => p.id === df.id);
         return existing ? existing : df;
@@ -36,7 +41,7 @@ const ProgressTracker: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   });
 
   useEffect(() => {
-    localStorage.setItem('deckforge_progress_v2', JSON.stringify(features));
+    localStorage.setItem('deckforge_progress_v3', JSON.stringify(features));
   }, [features]);
 
   const toggleFeature = (id: string) => {

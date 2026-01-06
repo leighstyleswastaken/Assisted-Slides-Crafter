@@ -52,12 +52,14 @@ This document serves as the source of truth for all implemented features to prev
 - [x] **High-Res PDF Export**: DOM-capture system that preserves Google Fonts and CSS effects.
 - [x] **PPTX Export**: Native PowerPoint generation with precision coordinate mapping.
     - [x] **Style Parity**: Respects state-driven Bold, Italic, and browser-measured Font Size.
-    - *Constraint*: Requires local installation of brand fonts for layout parity.
-- [x] **Lazy Loading**: Assets load asynchronously to keep the render loop smooth for large decks.
+    - [x] **Font Pack Generator**: Scrapes and bundles custom Google Fonts into a ZIP for local installation to ensure PPTX rendering fidelity.
+- [x] **Virtualized Navigator**: High-performance thumbnail rail using `react-window` for efficient scrolling of large decks.
 
 ## Infrastructure & DX
+- [x] **PWA**: Fully installable with Service Worker caching for offline app loading.
 - [x] **Global State Machine**: Redux-style reducer with single-atom state (`RunDoc`).
 - [x] **Persistence**: IndexedDB autosave with schema validation.
+- [x] **Quick Restore**: Load JSON projects directly from the welcome screen.
 - [x] **Undo/Redo**: Full history stack for all destructive actions.
 - [x] **Usage Monitor**: Real-time token tracking and API latency logging.
 - [x] **YOLO Mode**: Full-pipeline automation with Pause/Resume/Abort controls.

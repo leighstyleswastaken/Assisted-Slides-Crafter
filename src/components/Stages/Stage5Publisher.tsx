@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useRunDoc } from '../../context/RunDocContext';
 import { Stage, Action, StageStatus, Asset, AssetKind } from '../../types';
 import { SlideSurface } from '../Renderer/SlideSurface';
-import { FileDown, Loader2, Presentation, Bot, CheckCircle2, Unlock, Bug, Gauge } from 'lucide-react';
+import { FileDown, Loader2, Presentation, Bot, CheckCircle2, Unlock, Bug, Gauge, Layout } from 'lucide-react';
 import { generatePPTX } from '../../services/pptxService';
 import { generatePDF } from '../../services/pdfService';
 import { runReviewLoop, ReviewSuggestion } from '../../services/reviewerService';
@@ -12,6 +12,8 @@ import { removeBackgroundAI, removeBackgroundColorKey, compressImage } from '../
 import ConfirmModal from '../UI/ConfirmModal';
 import { StageScaffold } from '../Layout/StageScaffold';
 import { STAGE_NAMES } from '../../constants';
+// @ts-ignore
+import { FixedSizeList as List } from 'react-window';
 
 // Sub-components
 import ReviewModal from './Publisher/ReviewModal';
@@ -34,27 +36,28 @@ const Stage5Publisher: React.FC = () => {
   const [elapsedTime, setElapsedTime] = useState(0);
   const timerRef = useRef<number | null>(null);
   
-  // Anti-Churn: Track the timestamp of the last successful review
+  // Anti-Churn
   const [lastAnalysed, setLastAnalysed] = useState<string | null>(null);
   const applyingFixes = useRef(false);
   
-  // State for Reviewer Suggestions (Wrapped with selection state)
+  // Reviewer State
   const [pendingSuggestions, setPendingSuggestions] = useState<SelectableSuggestion[]>([]);
-  
-  // State for Debugging failed JSON
   const [failedResponseLog, setFailedResponseLog] = useState<string>("");
   
   const [polish, setPolish] = useState({ noise: false, vignette: false });
   const [showFinaliseConfirm, setShowFinaliseConfirm] = useState<string[] | null>(null);
   
-  // Explicitly allow overriding the model for review to Ensure 'Pro' quality
+  // Settings
   const [useProModel, setUseProModel] = useState(true);
   const [concurrency, setConcurrency] = useState(1);
+
+  // Scroll ref for main view
+  const mainScrollRef = useRef<HTMLDivElement>(null);
 
   const isApproved = state.stage_status[Stage.Publisher] === StageStatus.Approved;
   const isDraft = !isApproved;
 
-  // Effect: When we apply AI fixes, we consider the RESULTING state as "Analysed" (Clean)
+  // Effects...
   useEffect(() => {
     if (applyingFixes.current && !isApplyingFixes) {
        setLastAnalysed(state.last_modified);
@@ -62,7 +65,6 @@ const Stage5Publisher: React.FC = () => {
     }
   }, [state.last_modified, isApplyingFixes]);
 
-  // Timer Effect
   useEffect(() => {
     if (isImproving) {
       setElapsedTime(0);
@@ -75,6 +77,17 @@ const Stage5Publisher: React.FC = () => {
     }
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [isImproving]);
+
+  // -- Handlers --
+
+  const scrollToSlide = (index: number) => {
+     if (mainScrollRef.current) {
+        const slideElements = mainScrollRef.current.querySelectorAll('.canonical-slide');
+        if (slideElements[index]) {
+           slideElements[index].scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+     }
+  };
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -111,7 +124,7 @@ const Stage5Publisher: React.FC = () => {
   const handleRunImprovement = async () => {
     setIsImproving(true);
     setImproveStatus("Warming up...");
-    setFailedResponseLog(""); // Clear previous logs
+    setFailedResponseLog("");
     const currentSnapshotTime = state.last_modified;
     
     try {
@@ -293,6 +306,42 @@ const Stage5Publisher: React.FC = () => {
 
   const isUpToDate = state.last_modified === lastAnalysed;
 
+  // -- Renderers --
+
+  // Row renderer for react-window
+  const ThumbnailRow = ({ index, style }: { index: number; style: React.CSSProperties }) => {
+    const slide = state.slides[index];
+    const outlineItem = state.outline.find(o => o.slide_id === slide.slide_id);
+    
+    return (
+      <div style={{ ...style, padding: '8px' }}>
+        <button 
+          onClick={() => scrollToSlide(index)}
+          className="w-full h-full flex gap-3 p-2 bg-gray-900 border border-gray-800 rounded hover:bg-gray-800 hover:border-gray-700 transition-all text-left group relative overflow-hidden"
+        >
+          <div className="w-24 aspect-video bg-gray-950 rounded border border-gray-800 overflow-hidden shrink-0 relative">
+             {/* Mini Render */}
+             <div className="origin-top-left transform scale-[0.165]" style={{ width: '1920px', height: '1080px' }}>
+                <SlideSurface 
+                   slide={slide}
+                   assets={state.asset_library}
+                   branding={state.branding}
+                   mode="preview"
+                   polish={polish}
+                />
+             </div>
+             {/* Interaction overlay */}
+             <div className="absolute inset-0 bg-transparent group-hover:bg-white/5 transition-colors"></div>
+          </div>
+          <div className="flex-1 min-w-0 flex flex-col justify-center">
+             <span className="text-[10px] text-gray-500 font-mono mb-1">{String(index + 1).padStart(2, '0')}</span>
+             <span className="text-xs font-bold text-gray-300 truncate">{outlineItem?.title || slide.slide_id}</span>
+          </div>
+        </button>
+      </div>
+    );
+  };
+
   return (
     <StageScaffold
       title="Publisher"
@@ -314,7 +363,6 @@ const Stage5Publisher: React.FC = () => {
              <div className="flex items-center gap-2">
                {/* Controls Container */}
                <div className="flex items-center gap-2 mr-2 bg-gray-900/50 p-1 rounded-lg border border-gray-800">
-                  {/* Pro Model Toggle */}
                   <div className="flex items-center gap-1.5 px-2 border-r border-gray-800" title="Use Gemini 3 Pro for deeper reasoning">
                       <input 
                         type="checkbox" 
@@ -326,8 +374,7 @@ const Stage5Publisher: React.FC = () => {
                       <label htmlFor="usePro" className="text-[10px] text-gray-400 font-bold uppercase cursor-pointer select-none">Pro</label>
                   </div>
 
-                  {/* Speed Selector */}
-                  <div className="flex items-center gap-1.5 px-1" title="Parallel Requests (Higher is faster but uses more quota)">
+                  <div className="flex items-center gap-1.5 px-1" title="Parallel Requests">
                       <Gauge size={14} className="text-gray-500"/>
                       <select 
                         value={concurrency}
@@ -341,7 +388,6 @@ const Stage5Publisher: React.FC = () => {
                   </div>
                </div>
 
-               {/* Failed Logs Download (Testing) */}
                {failedResponseLog && (
                   <button 
                      onClick={handleDownloadDebugLog}
@@ -360,7 +406,6 @@ const Stage5Publisher: React.FC = () => {
                      ? 'bg-gray-800 text-gray-600 opacity-50 cursor-not-allowed' 
                      : 'bg-gray-800 hover:bg-purple-900/30 text-gray-300 hover:border-purple-500/30'
                   }`}
-                  title={isUpToDate ? "No changes detected since last review" : `Run AI Creative Director`}
                >
                   {isImproving ? <Loader2 className="animate-spin" size={20} /> : isUpToDate ? <CheckCircle2 size={20} /> : <Bot size={20} />} 
                   {isImproving ? (
@@ -407,8 +452,29 @@ const Stage5Publisher: React.FC = () => {
           setPolish={setPolish} 
         />
       }
+      rightPanel={
+         <div className="flex flex-col h-full bg-gray-900/10">
+            <div className="p-4 border-b border-gray-800 text-gray-400 font-mono text-sm font-bold uppercase tracking-wider flex items-center gap-2">
+               <Layout size={16} /> Navigator
+            </div>
+            <div className="flex-1">
+               <List
+                  height={800} // This will need to be dynamic in a real app (useResizeObserver), but 800 is a safe average for desktop
+                  itemCount={state.slides.length}
+                  itemSize={90} // Height of each row
+                  width="100%"
+                  className="no-scrollbar"
+               >
+                  {ThumbnailRow}
+               </List>
+            </div>
+         </div>
+      }
     >
-      <div className="flex-1 overflow-y-auto bg-gray-950 p-8 flex justify-center">
+      <div 
+         ref={mainScrollRef}
+         className="flex-1 overflow-y-auto bg-gray-950 p-8 flex justify-center"
+      >
         <div className="space-y-8 w-full max-w-[1122px] pb-32">
           {state.slides.map((slide, index) => (
             <div key={slide.slide_id} className="relative group shadow-2xl canonical-slide">

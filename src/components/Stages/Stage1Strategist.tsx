@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect } from 'react';
 import { useRunDoc } from '../../context/RunDocContext';
 import { Stage, StageStatus, OutlineItem, Branding } from '../../types';
 import { generateBranding, generateOutline, validateBranding } from '../../services/geminiService';
-import { Sparkles, ArrowDown, ArrowUp, Trash2, Plus, GripVertical, FileText, Palette, List, Loader2, Unlock, Rocket, Tag, Eye, Pencil, Check, X, ShieldAlert, Type, ChevronDown, GraduationCap, ChevronRight } from 'lucide-react';
+import { Sparkles, ArrowDown, ArrowUp, Trash2, Plus, GripVertical, FileText, Palette, List, Loader2, Unlock, Rocket, Tag, Eye, Pencil, Check, X, ShieldAlert, Type, ChevronDown, GraduationCap, ChevronRight, PenTool } from 'lucide-react';
 import LockGuard from '../UI/LockGuard';
 import ConfirmModal from '../UI/ConfirmModal';
 import { POPULAR_FONTS, PRESENTATION_TYPES } from '../../constants';
@@ -269,10 +270,10 @@ const Stage1Strategist: React.FC = () => {
                  </div>
              )}
 
-             {state.revisions.branding > 0 ? (
+             {state.revisions.branding > 0 || isEditingBranding ? (
                 isEditingBranding ? (
                    <div className="space-y-6 animate-in fade-in duration-300">
-                      {/* ... (Branding Edit Form - Unchanged) ... */}
+                      {/* ... (Branding Edit Form) ... */}
                       <div className="group">
                          <label className="text-xs font-bold text-gray-500 uppercase mb-2 block">Tone & Voice</label>
                          <textarea 
@@ -355,16 +356,24 @@ const Stage1Strategist: React.FC = () => {
                          </div>
                          <input 
                             type="text" 
-                            placeholder="Add keyword + Enter" 
+                            placeholder="Add keywords (separated by comma) + Enter" 
                             className="bg-gray-800 text-gray-300 text-xs p-2 rounded w-full border border-gray-700"
-                            maxLength={20}
+                            maxLength={500}
                             onKeyDown={(e) => {
                                if (e.key === 'Enter') {
-                                  addListIdx('keywords', e.currentTarget.value);
-                                  e.currentTarget.value = '';
+                                  const val = e.currentTarget.value;
+                                  if (val.trim()) {
+                                     // Allow comma separated bulk entry
+                                     const newItems = val.split(',').map(s => s.trim().substring(0, 20)).filter(s => s);
+                                     if (newItems.length > 0) {
+                                        updateLocal('keywords', [...(localBranding.keywords || []), ...newItems]);
+                                        e.currentTarget.value = '';
+                                     }
+                                  }
                                }
                             }}
                          />
+                         <p className="text-[9px] text-gray-500 mt-1">Tip: You can paste a comma-separated list.</p>
                       </div>
 
                       <div className="group">
@@ -379,12 +388,19 @@ const Stage1Strategist: React.FC = () => {
                          </div>
                          <input 
                             type="text" 
-                            placeholder="Add feature + Enter" 
+                            placeholder="Add features (separated by comma) + Enter" 
                             className="bg-gray-800 text-gray-300 text-xs p-2 rounded w-full border border-gray-700"
                             onKeyDown={(e) => {
                                if (e.key === 'Enter') {
-                                  addListIdx('visual_features', e.currentTarget.value);
-                                  e.currentTarget.value = '';
+                                  const val = e.currentTarget.value;
+                                  if (val.trim()) {
+                                     // Allow comma separated bulk entry
+                                     const newItems = val.split(',').map(s => s.trim()).filter(s => s);
+                                     if (newItems.length > 0) {
+                                        updateLocal('visual_features', [...(localBranding.visual_features || []), ...newItems]);
+                                        e.currentTarget.value = '';
+                                     }
+                                  }
                                }
                             }}
                          />
@@ -523,6 +539,15 @@ const Stage1Strategist: React.FC = () => {
                <div className="flex flex-col items-center justify-center h-64 text-gray-600 text-center px-6">
                  <Sparkles className="mb-4 opacity-20" size={48} />
                  <p className="text-sm">Enter source text and generate branding to begin the strategic analysis.</p>
+                 <div className="mt-4 pt-4 border-t border-gray-800 w-full flex justify-center">
+                    <button 
+                       onClick={() => setIsEditingBranding(true)}
+                       className="text-xs text-gray-500 hover:text-white underline decoration-dashed flex items-center gap-1 transition-colors"
+                    >
+                       <PenTool size={10} />
+                       Or configure manually
+                    </button>
+                 </div>
                </div>
              )}
           </LockGuard>

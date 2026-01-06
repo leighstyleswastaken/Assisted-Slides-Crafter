@@ -37,6 +37,13 @@
 - Handles "Polish" effects (Grain, Vignette).
 - **Complexity**: Medium. CSS composition and layering.
 
+## Font Service (`fontService`)
+**Responsibility**: Asset Acquisition.
+- Fetches CSS from Google Fonts API.
+- Parses and downloads binary font files (WOFF2).
+- Bundles them into ZIP archives for the "Font Pack" feature.
+- **Complexity**: Medium. Handling blobs and async streams.
+
 ## UI Stages (`Stage1` - `Stage5`)
 **Responsibility**: Human-in-the-loop Interface.
 - Visualization of the current state.

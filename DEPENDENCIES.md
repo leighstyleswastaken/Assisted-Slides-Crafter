@@ -10,6 +10,7 @@
 - **idb-keyval**: Simple Promise-based keyval store implemented with IndexedDB. Used for Autosave.
 - **react-dnd**: Drag and Drop primitives. Used in Stage 3 (Architect).
 - **react-dnd-html5-backend**: HTML5 backend for DnD.
+- **react-window**: Efficient virtualized list rendering for large slide decks (Stage 5).
 
 ## AI & Processing
 - **@google/genai**: Google Gemini API SDK. Powering all intelligence.
@@ -17,6 +18,9 @@
 
 ## Output
 - **html2pdf.js**: Client-side PDF generation. Captures the DOM of Stage 5 and rasterizes it into a PDF.
+- **pptxgenjs**: Native PowerPoint file generation.
+- **jszip**: Used for bundling Asset Libraries and Font Packs.
+- **file-saver**: Helper for triggering browser downloads.
 
 ## Icons & Fonts
 - **lucide-react**: Icon set.

@@ -4,6 +4,8 @@
 ## Root
 - `index.html`: Entry point. Loads fonts, Tailwind, and Import Maps.
 - `index.tsx`: React Root mounting point.
+- `manifest.json`: PWA Manifest (Name, Icons, Theme Color).
+- `sw.js`: Service Worker for offline asset caching.
 - `metadata.json`: Capabilities manifest (e.g. microphone permissions).
 
 ## Source (`src/`)
@@ -27,6 +29,7 @@
 - `persistenceService.ts`: Wrapper for IndexedDB (`idb-keyval`) for saving/loading projects.
 - `validationService.ts`: Runtime integrity checks for the JSON data model.
 - `fontUtils.ts`: Dynamic Google Font loader.
+- `fontService.ts`: Font Pack Generator (fetch & zip).
 
 ### Components (`src/components/`)
 
@@ -40,7 +43,7 @@
   - `ArtDept/AssetGallery.tsx`: Grid view of generated images with controls and safety modals.
 - `Stage3Architect.tsx`: Drag-and-drop layout editor using `react-dnd`.
 - `Stage4Copywriter.tsx`: Text editor with layout overlay and soft-limit warnings.
-- `Stage5Publisher.tsx`: Final read-only rendering and PDF export.
+- `Stage5Publisher.tsx`: Final read-only rendering and PDF export. Supports virtualized list for thumbnails.
 
 #### Renderer
 - `SlideRenderer.tsx`: The "Engine" that takes a `Slide` object + `AssetLibrary` and renders the final visual output. Used in Stage 5 and PDF generation.
@@ -50,7 +53,7 @@
 - `StatusBadge.tsx`: Visual indicator for stage status (Locked, Open, Approved).
 - `LockGuard.tsx`: A wrapper component that enforces read-only state on approved stages and handles the "Unlock" workflow.
 - `LoadingScreen.tsx`: Initial app load state.
-- `WelcomeModal.tsx`: Onboarding tutorial.
+- `WelcomeModal.tsx`: Onboarding tutorial and JSON Import.
 
 #### DevTools
 - `ProgressTracker.tsx`: Internal tool for tracking feature implementation status.

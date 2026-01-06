@@ -77,8 +77,11 @@
 - [x] **Feature: High-Fidelity Thematic Emoji Mocks for Stamps**
 - [x] **Feature: Anti-Churn Logic for Auto-Improve (Prevent Hallucinations)**
 - [x] **Safety: Auto-fallback to Mock Mode when API Key is missing**
+- [x] **Feature: PWA Support (Manifest + Service Worker)**
+- [x] **Feature: Virtualized Slide Navigator (react-window)**
+- [x] **Feature: Font Pack Downloader for PPTX Parity**
+- [x] **Feature: Load Project (Drag & Drop) from Welcome Screen**
 
 ## Next Steps
-- [ ] Deploy to Vercel (Ready)
 - [ ] Add real-time audio conversation support (Future)
 - [ ] Integrate Veo video background support (Future)
