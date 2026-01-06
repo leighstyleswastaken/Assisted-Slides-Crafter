@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useRunDoc } from '../../context/RunDocContext';
 import { Stage, StageStatus, AppNotification } from '../../types';
@@ -8,7 +9,7 @@ import Stage2ArtDept from '../Stages/Stage2ArtDept';
 import Stage3Architect from '../Stages/Stage3Architect';
 import Stage4Copywriter from '../Stages/Stage4Copywriter';
 import Stage5Publisher from '../Stages/Stage5Publisher';
-import { Hammer, Brain, Palette, Layout, PenTool, Printer, Terminal, Settings, Rocket, Pause, Play, Square, X, Save, Activity, Undo2, Redo2, Zap, CloudOff, Info, AlertTriangle, CheckCircle, AlertCircle, GraduationCap, LogOut } from 'lucide-react';
+import { Hammer, Brain, Palette, Layout, PenTool, Printer, Terminal, Settings, Rocket, Pause, Play, Square, X, Save, Activity, Undo2, Redo2, Zap, CloudOff, Info, AlertTriangle, CheckCircle, AlertCircle, GraduationCap, LogOut, Menu } from 'lucide-react';
 import ProgressTracker from '../DevTools/ProgressTracker';
 import UsageLogger from '../DevTools/UsageLogger';
 import WelcomeModal from '../UI/WelcomeModal';
@@ -142,6 +143,7 @@ const AppShell: React.FC = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
   // Quota Monitoring
   const [tokenCount, setTokenCount] = useState({ input: 0, output: 0 });
@@ -177,6 +179,7 @@ const AppShell: React.FC = () => {
   const handleStageChange = (newStage: Stage) => {
     if (canNavigateTo(newStage) && !yolo.isActive) {
       dispatch({ type: 'SET_STAGE', payload: newStage });
+      setIsSidebarOpen(false); // Close sidebar on mobile nav
     }
   };
 
@@ -222,25 +225,44 @@ const AppShell: React.FC = () => {
       
       {isTutorial && <TutorialCoach state={state} onExit={() => setShowExitConfirm(true)} />}
 
-      {/* Toast Container - Moved to Bottom Left */}
-      <div className="absolute bottom-4 left-4 z-[9999] flex flex-col gap-2 pointer-events-none max-w-sm w-full">
+      {/* Toast Container */}
+      <div className="absolute top-16 right-4 z-[9999] flex flex-col gap-2 pointer-events-none max-w-sm w-full md:left-auto">
          {notifications.map(n => (
             <Toast key={n.id} notification={n} onDismiss={() => removeNotification(n.id)} />
          ))}
       </div>
 
+      {/* Mobile Sidebar Overlay */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/80 z-40 lg:hidden backdrop-blur-sm animate-in fade-in" 
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
-      <aside className="w-64 border-r border-gray-800 bg-gray-900/50 flex flex-col relative overflow-hidden">
+      <aside className={`
+        fixed inset-y-0 left-0 z-50 w-64 border-r border-gray-800 bg-gray-900 shadow-2xl flex flex-col transition-transform duration-300 transform
+        lg:relative lg:translate-x-0 lg:shadow-none
+        ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+      `}>
         
         {isTutorial && (
           <div className="absolute top-0 left-0 w-full h-1 bg-indigo-500 z-50"></div>
         )}
 
-        <div className="p-6 border-b border-gray-800 flex flex-col gap-4">
+        <div className="p-6 border-b border-gray-800 flex flex-col gap-4 relative">
+           <button 
+             onClick={() => setIsSidebarOpen(false)} 
+             className="absolute top-4 right-4 text-gray-500 hover:text-white lg:hidden"
+           >
+             <X size={20}/>
+           </button>
+
            <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="bg-blue-600 p-1.5 rounded text-white"><Hammer size={20} /></div>
-                <h1 className="font-bold text-lg tracking-tight">Assisted Slides Crafter</h1>
+                <h1 className="font-bold text-lg tracking-tight">Assisted Slides</h1>
               </div>
            </div>
            <div className="flex items-center justify-between gap-2">
@@ -344,13 +366,21 @@ const AppShell: React.FC = () => {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-auto relative bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-gray-900 via-gray-950 to-gray-950 flex flex-col">
+      <main className="flex-1 overflow-auto relative bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-gray-900 via-gray-950 to-gray-950 flex flex-col w-full">
         
+        {/* Mobile Header Toggle */}
+        <div className="lg:hidden p-4 border-b border-gray-800 flex items-center gap-3 bg-gray-900/80 backdrop-blur-sm sticky top-0 z-30">
+           <button onClick={() => setIsSidebarOpen(true)} className="p-2 bg-gray-800 rounded text-gray-300 hover:text-white">
+              <Menu size={20}/>
+           </button>
+           <h1 className="font-bold text-sm text-white">{STAGE_NAMES[state.stage]}</h1>
+        </div>
+
         <div className="flex-1 relative overflow-hidden flex flex-col">
             {renderActiveView()}
         </div>
         
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-gray-900/90 backdrop-blur border border-gray-800 rounded-full px-4 py-2 text-[10px] font-mono text-gray-400 pointer-events-none select-none z-50 no-print flex items-center gap-3 shadow-2xl ring-1 ring-white/5">
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-gray-900/90 backdrop-blur border border-gray-800 rounded-full px-4 py-2 text-[10px] font-mono text-gray-400 pointer-events-none select-none z-50 no-print flex items-center gap-3 shadow-2xl ring-1 ring-white/5 hidden md:flex">
            <span className="flex items-center gap-1"><span className="text-gray-600">PROJ:</span> <span className="text-white">{state.project_id}</span></span>
            <span className="w-px h-3 bg-gray-700"></span>
            <span className="flex items-center gap-1"><span className="text-gray-600">REV:</span> <span className="text-blue-400">{state.revisions.source}.{state.revisions.branding}.{state.revisions.outline}</span></span>
@@ -376,7 +406,7 @@ const AppShell: React.FC = () => {
 
       {/* Modals & Overlays */}
       {yolo.isActive && (
-        <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center animate-in fade-in duration-300 p-4">
            <div className="bg-gray-900 border border-gray-800 p-8 rounded-2xl shadow-2xl max-w-md w-full flex flex-col items-center text-center relative overflow-hidden">
               
               {(state.ai_settings?.mockMode || isTutorial) && (
@@ -397,7 +427,7 @@ const AppShell: React.FC = () => {
                     </p>
                     <button 
                        onClick={yolo.start}
-                       className="px-8 py-3 bg-white text-black hover:bg-gray-200 rounded-full font-bold flex items-center gap-2 transition-transform active:scale-95"
+                       className="px-8 py-3 bg-white text-black hover:bg-gray-200 rounded-full font-bold flex items-center gap-2 transition-transform active:scale-95 w-full justify-center"
                     >
                        <Play size={20} fill="currentColor"/> { (state.ai_settings?.mockMode || isTutorial) ? 'Run Tutorial Pipeline' : 'Start Generation'}
                     </button>

@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useRunDoc } from '../../context/RunDocContext';
 import { Stage, StageStatus, Asset, ImageConcept } from '../../types';
@@ -261,19 +262,20 @@ const Stage2ArtDept: React.FC = () => {
       )}
 
       {/* Header */}
-      <div className="p-6 border-b border-gray-800 flex justify-between items-center bg-gray-900/50 backdrop-blur-sm sticky top-0 z-10">
+      <div className="p-4 md:p-6 border-b border-gray-800 flex justify-between items-center bg-gray-900/50 backdrop-blur-sm sticky top-0 z-10 shrink-0">
         <div>
-          <h2 className="text-2xl font-bold font-mono text-white flex items-center gap-2">
+          <h2 className="text-xl md:text-2xl font-bold font-mono text-white flex items-center gap-2">
             <span className="text-purple-500">02</span> Art Dept
           </h2>
-          <p className="text-sm text-gray-400 mt-1">Generate, curate, and refine visual assets.</p>
+          <p className="text-xs md:text-sm text-gray-400 mt-1">Generate, curate, and refine visual assets.</p>
         </div>
         
         <div className="flex items-center gap-4">
           {isApproved ? (
             <div className="flex items-center gap-2">
-              <div className="px-4 py-2 bg-gray-900 border border-green-900/50 text-green-400 rounded-full text-xs font-mono font-bold flex items-center gap-2">
-                <span>LOCKED & APPROVED</span>
+              <div className="px-3 py-1 md:px-4 md:py-2 bg-gray-900 border border-green-900/50 text-green-400 rounded-full text-xs font-mono font-bold flex items-center gap-2">
+                <span className="hidden md:inline">LOCKED & APPROVED</span>
+                <span className="md:hidden">LOCKED</span>
               </div>
               <button 
                 onClick={() => dispatch({ type: 'UNLOCK_STAGE', payload: Stage.ArtDept })}
@@ -287,19 +289,19 @@ const Stage2ArtDept: React.FC = () => {
              <button
                onClick={() => dispatch({ type: 'APPROVE_STAGE', payload: Stage.ArtDept })}
                disabled={state.asset_library.filter(a => a.keep).length === 0}
-               className={`px-6 py-2.5 rounded font-bold transition-all flex items-center gap-2 shadow-lg ${
+               className={`px-4 py-2 md:px-6 md:py-2.5 rounded font-bold transition-all flex items-center gap-2 shadow-lg text-xs md:text-sm ${
                  state.asset_library.filter(a => a.keep).length === 0
                  ? 'bg-gray-800 text-gray-600 cursor-not-allowed'
                  : 'bg-green-600 hover:bg-green-500 text-white hover:shadow-green-900/20'
                }`}
              >
-               Approve Assets <ArrowRight size={16} />
+               Approve <span className="hidden md:inline">Assets</span> <ArrowRight size={16} />
              </button>
           )}
         </div>
       </div>
 
-      <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
+      <div className="flex-1 overflow-auto flex flex-col lg:flex-row">
         <ConceptBrief 
           concepts={concepts}
           isGeneratingConcepts={isGeneratingConcepts}
