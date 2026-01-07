@@ -1,4 +1,4 @@
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import React, { ErrorInfo, ReactNode } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 
 interface Props {
@@ -10,29 +10,29 @@ interface State {
   error: Error | null;
 }
 
-class ErrorBoundary extends Component<Props, State> {
+class ErrorBoundary extends React.Component<Props, State> {
   public state: State = {
     hasError: false,
     error: null,
   };
 
-  static getDerivedStateFromError(error: Error): State {
+  public static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('Uncaught error:', error, errorInfo);
   }
 
-  handleReload = () => {
+  private handleReload = () => {
     window.location.reload();
   };
 
-  handleReset = () => {
+  private handleReset = () => {
     this.setState({ hasError: false, error: null });
   };
 
-  render() {
+  public render() {
     if (this.state.hasError) {
       return (
         <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center p-6 text-center">

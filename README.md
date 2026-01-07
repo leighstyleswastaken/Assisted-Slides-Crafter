@@ -1,63 +1,40 @@
 
-# Assisted Slides Crafter v2
+# Assisted Slides Crafter v3.0
 
-Assisted Slides Crafter is a "glass box" slide generator that emphasizes human curation over blind automation. It follows a strict 5-stage pipeline where every step requires user approval before proceeding.
-
-## Documentation Files
-
--   **[README.md](README.md)**
-    -   Provides developers with a high-level overview of the project's concepts and usage.
-
--   **[PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md)**
-    -   Serves as a manifest of all files in the project, detailing their intent and functionality.
-
--   **[RESPONSIBILITIES.md](RESPONSIBILITIES.md)**
-    -   Tracks the primary roles and complexity of each module to maintain a clear separation of concerns.
-
--   **[DATA_MODEL.md](DATA_MODEL.md)**
-    -   Defines the core data structures used in the application's domain logic.
-
--   **[STATE_AND_DATA_FLOW.md](STATE_AND_DATA_FLOW.md)**
-    -   Documents the application's "backend" business logic and state lifecycle.
-
--   **[FRONTEND_FLOW.md](FRONTEND_FLOW.md)**
-    -   Documents the UI component hierarchy and data flow from parent to child components.
-
--   **[EXAMPLE_SCENARIO.md](EXAMPLE_SCENARIO.md)**
-    -   Provides a concrete, narrative example of a user flow to illustrate system behavior, including failure and recovery loops.
-
--   **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**
-    -   Explains the architectural layers used to ensure stability, safety, and auditability.
-
--   **[docs/AGENT_PROTOCOL.md](docs/AGENT_PROTOCOL.md)**
-    -   The definitive guide to Agent Personas, Communication Protocols, and the Failure/Recovery Loops.
-
--   **[DEPENDENCIES.md](DEPENDENCIES.md)**
-    -   Lists all external project dependencies and their purpose.
+Assisted Slides Crafter (ASC) is a "glass box" AI presentation engine that prioritizes human curation over blind automation. It features a strict 5-stage pipeline—Strategist, Art Dept, Architect, Copywriter, and Publisher—ensuring professional, deterministic output.
 
 ## Core Philosophy
-1.  **Linear Pipeline:** Stage 1 -> Stage 5.
-2.  **Asset Kit Builder:** Reusable textures and transparent stamps.
-3.  **Deterministic Layout:** Cardinal Grid zones (3x3).
-4.  **State Machine:** Backed by a single `RunDoc` JSON object.
-5.  **WYSIWYG:** What you see is exactly what exports to PDF.
-6.  **YOLO Autopilot:** A managed automated pipeline that navigates stages for you, with Pause/Resume interruptibility.
-7.  **Strict Governance:** Approved stages are strictly read-only unless explicitly unlocked by the user.
+1.  **Linear Pipeline:** A structured workflow (Stage 1 -> Stage 5) that mirrors a real creative agency.
+2.  **Glass Box AI:** Every AI decision (branding, outline, layout) is visible, editable, and reversible.
+3.  **Deterministic Layout:** A 3x3 Cardinal Grid system ensures layouts are reproducible and exportable.
+4.  **WYSIWYG:** The browser rendering engine allows for pixel-perfect PDF and PPTX exports.
+5.  **Offline-First:** Fully PWA compliant with a robust Mock Mode for offline or demo usage.
 
-## Features & Capabilities
+## Key Features
 
-### PWA & Offline Support
-This application is fully PWA-compliant.
--   **Installable**: Can be installed to the home screen or desktop via the browser's "Install App" feature.
--   **Offline Capable**: The app shell and core libraries are cached via Service Worker.
--   **Mock Mode**: If no API key is present or the network is down, the app degrades gracefully to "Mock Mode," allowing full workflow testing without AI.
+### 🚀 Template System
+Jumpstart projects with pre-configured narrative structures:
+-   **Startup Pitch**: Problem, Solution, Market, Business Model.
+-   **Educational**: Goals, Concepts, Case Studies, Takeaways.
+-   **Status Report**: Metrics, Blockers, Roadmap (Data-heavy).
+-   **Narrative**: Hero's Journey arc for emotional storytelling.
 
-### Export & Fidelity
--   **PDF**: High-fidelity DOM capture using `html2canvas` and `jsPDF`.
--   **PPTX**: Native PowerPoint generation.
--   **Font Parity**: Includes a **Font Pack Generator** that downloads and zips the specific Google Fonts used in the branding so users can install them locally for perfect PowerPoint rendering.
+### 🛠️ PWA & Offline Support
+-   **Installable**: Runs as a native desktop/mobile app via Chrome/Edge.
+-   **Mock Mode**: Automatically detects missing API keys or network issues and switches to a high-fidelity simulation mode using programmatic art generation.
+-   **Local Persistence**: All work is autosaved to IndexedDB.
 
-## Deployment & Demo Mode
+### 🎨 High-Fidelity Export
+-   **PDF**: Canvas-based rasterization captures every pixel, font, and CSS effect (grain, vignette).
+-   **PPTX**: Native PowerPoint generation with editable text and images.
+-   **Font Pack**: Automatically downloads and zips Google Fonts used in the project for local installation, ensuring PowerPoint text looks identical to the web view.
+
+### 🤖 The "YOLO" Autopilot
+A managed automated pipeline that navigates the stages for you.
+-   **Interruptible**: Pause, Resume, or Stop the AI at any moment.
+-   **Creative Director**: A specialized "Reviewer" agent in Stage 5 that critiques the final deck and autonomously fixes layout issues or commissions new assets.
+
+## Deployment & Setup
 
 ### Real AI Mode
 To use the application with real AI capabilities:
@@ -66,12 +43,21 @@ To use the application with real AI capabilities:
 3.  Add `API_KEY=your_google_gemini_api_key`.
 4.  Run the app.
 
-### Offline / Demo Mode (Vercel)
-The application includes a robust **Mock Mode** that simulates all AI responses locally using heuristics and programmatic canvas generation.
-1.  Deploy the repository to Vercel/Netlify.
-2.  **Do not** set an `API_KEY` environment variable.
-3.  The application will detect the missing key on startup and automatically enter "Demo Mode", allowing users to experience the full workflow (Strategist -> Publisher) with simulated data.
+### Demo / Tutorial Mode
+The application is designed to work immediately without configuration:
+1.  Deploy to Vercel/Netlify.
+2.  Open the app.
+3.  If no API key is detected, it enters **Mock Mode**.
+4.  Select **"Guided Tutorial"** on the welcome screen to learn the interface.
 
-## Development
-This project uses React 18, TypeScript, and Tailwind CSS.
-State is managed via a global Context (`RunDocContext`) adhering to the v2 JSON Schema.
+## Documentation
+-   **[PROGRESS.md](PROGRESS.md)**: Development changelog.
+-   **[FEATURES.md](FEATURES.md)**: Comprehensive feature list.
+-   **[PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md)**: File manifest.
+-   **[docs/AGENT_PROTOCOL.md](docs/AGENT_PROTOCOL.md)**: System prompt definitions.
+
+## Technology Stack
+-   **Frontend**: React 18, TypeScript, Tailwind CSS.
+-   **State**: Context API + useReducer + IndexedDB.
+-   **AI**: Google GenAI SDK (Gemini 3 Pro / Flash / Imagen).
+-   **Graphics**: HTML5 Canvas, SVG Filters, WebP Compression.

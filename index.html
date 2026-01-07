@@ -28,6 +28,16 @@
         }
       }
     </script>
+    <script>
+      // Global PWA Event Capture
+      // Captures the event if it fires before React is ready
+      window.deferredPrompt = null;
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        window.deferredPrompt = e;
+        console.log("PWA event captured globally");
+      });
+    </script>
     <style>
       body {
         background-color: #030712; /* gray-950 */

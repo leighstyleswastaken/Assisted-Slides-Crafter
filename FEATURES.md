@@ -1,8 +1,6 @@
 
 # Assisted Slides Crafter: Master Feature List
 
-This document serves as the source of truth for all implemented features to prevent regression during development.
-
 ## 01. Strategist (Analysis & Core Identity)
 - [x] **Source Material Ingestion**: Support for large text blocks with automatic manual editing.
 - [x] **Branding Extraction**: AI-driven generation of Tone, Palette (Hex), Typography, and Visual Keywords.
@@ -52,8 +50,8 @@ This document serves as the source of truth for all implemented features to prev
 - [x] **High-Res PDF Export**: DOM-capture system that preserves Google Fonts and CSS effects.
 - [x] **PPTX Export**: Native PowerPoint generation with precision coordinate mapping.
     - [x] **Style Parity**: Respects state-driven Bold, Italic, and browser-measured Font Size.
-    - [x] **Font Pack Generator**: Scrapes and bundles custom Google Fonts into a ZIP for local installation to ensure PPTX rendering fidelity.
-- [x] **Virtualized Navigator**: High-performance thumbnail rail using `react-window` for efficient scrolling of large decks.
+    - [x] **Font Pack Generator**: Scrapes and bundles custom Google Fonts into a ZIP for local installation.
+- [x] **Virtualized Navigator**: High-performance thumbnail rail using `react-window` for efficient scrolling.
 
 ## Infrastructure & DX
 - [x] **PWA**: Fully installable with Service Worker caching for offline app loading.
@@ -61,10 +59,10 @@ This document serves as the source of truth for all implemented features to prev
 - [x] **Global State Machine**: Redux-style reducer with single-atom state (`RunDoc`).
 - [x] **Persistence**: IndexedDB autosave with schema validation.
 - [x] **Quick Restore**: Load JSON projects directly from the welcome screen.
+- [x] **Project Archive**: Full ZIP export containing JSON data, logs, and raw asset files.
 - [x] **Undo/Redo**: Full history stack for all destructive actions.
 - [x] **Usage Monitor**: Real-time token tracking and API latency logging.
 - [x] **YOLO Mode**: Full-pipeline automation with Pause/Resume/Abort controls.
 - [x] **Mock Mode**: Seamless offline development with simulated AI responses.
-- [x] **Safe Demo Deployment**: Automatic fallback to Mock Mode if API Keys are missing in production.
 - [x] **Rich Template Library**: Dedicated starter decks for various use cases (Startup, Education, Status).
 - [x] **Commission History**: Explicit logging of AI-generated assets with visual tagging in gallery.

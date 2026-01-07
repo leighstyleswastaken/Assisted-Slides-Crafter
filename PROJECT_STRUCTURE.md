@@ -21,6 +21,9 @@
 - `INITIAL_RUN_DOC`: Default state for new projects.
 - `STAGE_NAMES` & `STAGE_DESCRIPTIONS`: Static configuration for the pipeline.
 
+### Domain Logic
+- `templates.ts`: Definitions for pre-built decks (Startup, Narrative, etc.) and the Tutorial flow.
+
 ### Services (`src/services/`)
 - `geminiService.ts`: Interface to Google's GenAI SDK. Handles specific model calls for text, JSON, and images.
 - `prompts.ts`: Storage for prompt engineering logic. Keeps prompts separate from code.
@@ -49,7 +52,7 @@
 - `SlideRenderer.tsx`: The "Engine" that takes a `Slide` object + `AssetLibrary` and renders the final visual output. Used in Stage 5 and PDF generation.
 
 #### UI
-- `SettingsModal.tsx`: Global settings (AI Models, Import/Export).
+- `SettingsModal.tsx`: Global settings (AI Models, Import/Export, Templates).
 - `StatusBadge.tsx`: Visual indicator for stage status (Locked, Open, Approved).
 - `LockGuard.tsx`: A wrapper component that enforces read-only state on approved stages and handles the "Unlock" workflow.
 - `LoadingScreen.tsx`: Initial app load state.

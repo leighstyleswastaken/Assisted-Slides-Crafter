@@ -1,5 +1,5 @@
 
-# Assisted Slides Crafter v2 Progress
+# Assisted Slides Crafter Progress Tracker
 
 ## Phase 1: Foundation (Completed)
 - [x] Project scaffolding (React + TS + Tailwind)
@@ -43,7 +43,7 @@
 - [x] Soft Limit/Overflow Detection
 - [x] Inline Editing & LockGuard
 - [x] **Feature: Bold and Italic text formatting**
-- [x] **Feature: Interactive Move and Resize for Text Areas (Verified & Logged)**
+- [x] **Feature: Interactive Move and Resize for Text Areas**
 
 ## Phase 6: Stage 5 - Publisher (Completed)
 - [x] View Mode (Clean render)
@@ -54,7 +54,7 @@
     - [x] Asset Commissioning Protocol
     - [x] **Feature: Persistent History Tracking (LOG_EVENT)**
 - [x] **Feature: PPTX Font and Style Parity (Bold/Italic/Size)**
-- [x] **Feature: Refactored Modular PPTX Engine with Documentation**
+- [x] **Feature: Refactored Modular PPTX Engine**
 - [x] **Feature: Lazy Loading & Rendering Performance**
 - [x] **Optimization: Parallel Review Execution (Turbo Mode)**
 - [x] **Feature: Live Review Timer**
@@ -66,22 +66,26 @@
 - [x] Usage Monitor (Token tracking)
 - [x] Global Undo/Redo (Cmd+Z)
 - [x] **Policy: Nearest Point Rounding (Math.round) for PPT Sizes**
-- [x] **Feature: Rich Template System**
+- [x] **Feature: Rich Template System (Startup, Status, Narrative)**
 
-## Phase 8: Bugfixes & Polish (Completed)
-- [x] Fix Architect icon imports
+## Phase 8: Polish & Release (Completed)
 - [x] Reclaim 3x3 Architect Grid as primary UI
-- [x] **Implement Master Feature Document (FEATURES.md)**
-- [x] **Enhanced Interaction Logging for Debugging**
 - [x] **Feature: Rich Programmatic Mock Image Generation (Offline Parity)**
 - [x] **Feature: High-Fidelity Thematic Emoji Mocks for Stamps**
-- [x] **Feature: Anti-Churn Logic for Auto-Improve (Prevent Hallucinations)**
 - [x] **Safety: Auto-fallback to Mock Mode when API Key is missing**
 - [x] **Feature: PWA Support (Manifest + Service Worker)**
 - [x] **Feature: Virtualized Slide Navigator (react-window)**
 - [x] **Feature: Font Pack Downloader for PPTX Parity**
 - [x] **Feature: Load Project (Drag & Drop) from Welcome Screen**
+- [x] **Feature: Project Archive Export (ZIP with Assets)**
 
-## Next Steps
-- [ ] Add real-time audio conversation support (Future)
-- [ ] Integrate Veo video background support (Future)
+## Phase 9: Gold Master (Status: Live)
+- [x] Production Deployment Configuration
+- [x] Documentation Updates
+- [x] Hidden DevTools for Clean UX
+- [x] **Tutorial Mode**: Interactive onboarding flow.
+
+## Future Roadmap (Post-v3)
+- [ ] Real-time Audio Conversation (Gemini Live)
+- [ ] Video Backgrounds (Veo)
+- [ ] Collaborative Editing (Multi-user)

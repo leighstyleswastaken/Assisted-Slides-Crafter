@@ -9,8 +9,7 @@ import Stage2ArtDept from '../Stages/Stage2ArtDept';
 import Stage3Architect from '../Stages/Stage3Architect';
 import Stage4Copywriter from '../Stages/Stage4Copywriter';
 import Stage5Publisher from '../Stages/Stage5Publisher';
-import { Hammer, Brain, Palette, Layout, PenTool, Printer, Terminal, Settings, Rocket, Pause, Play, Square, X, Save, Activity, Undo2, Redo2, Zap, CloudOff, Info, AlertTriangle, CheckCircle, AlertCircle, GraduationCap, LogOut, Menu, Download } from 'lucide-react';
-import ProgressTracker from '../DevTools/ProgressTracker';
+import { Hammer, Brain, Palette, Layout, PenTool, Printer, Settings, Rocket, Pause, Play, Square, X, Save, Activity, Undo2, Redo2, Zap, CloudOff, Info, AlertTriangle, CheckCircle, AlertCircle, GraduationCap, LogOut, Menu, Download } from 'lucide-react';
 import UsageLogger from '../DevTools/UsageLogger';
 import WelcomeModal from '../UI/WelcomeModal';
 import SettingsModal from '../UI/SettingsModal';
@@ -138,7 +137,6 @@ const AppShell: React.FC = () => {
   const { state, canNavigateTo, dispatch, yolo, notifications, removeNotification } = useRunDoc();
   
   // View State
-  const [showDevTools, setShowDevTools] = useState(false);
   const [showUsage, setShowUsage] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
@@ -158,7 +156,16 @@ const AppShell: React.FC = () => {
     const handler = (e: any) => {
       e.preventDefault();
       setDeferredPrompt(e);
+      console.log("AppShell: PWA event caught via listener");
     };
+
+    // Check global stash (captured in index.html)
+    if ((window as any).deferredPrompt) {
+        console.log("AppShell: PWA event retrieved from global stash");
+        setDeferredPrompt((window as any).deferredPrompt);
+        (window as any).deferredPrompt = null;
+    }
+
     window.addEventListener('beforeinstallprompt', handler);
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
@@ -386,13 +393,6 @@ const AppShell: React.FC = () => {
              <Activity size={14} />
              <span>Usage Monitor</span>
            </button>
-           <button 
-             onClick={() => setShowDevTools(!showDevTools)}
-             className="flex items-center gap-2 text-xs text-gray-500 hover:text-gray-300 w-full p-2 rounded hover:bg-gray-800 transition-colors"
-           >
-             <Terminal size={14} />
-             <span>Dev Tools</span>
-           </button>
         </div>
       </aside>
 
@@ -529,8 +529,6 @@ const AppShell: React.FC = () => {
             onCancel={() => setShowExitConfirm(false)}
          />
       )}
-
-      {showDevTools && <ProgressTracker onClose={() => setShowDevTools(false)} />}
       
       {showUsage && <UsageLogger onClose={() => setShowUsage(false)} />}
       
