@@ -13,8 +13,7 @@ export const generatePDF = async (runDoc: RunDoc, customFilename?: string) => {
   const slides = document.querySelectorAll('.canonical-slide');
   
   if (!slides.length) {
-    alert("Please ensure the Publisher is visible to export. Rendering engine needs active DOM context for font parity.");
-    return;
+    throw new Error("Export Failed: Rendering engine needs active DOM context. Please ensure Publisher tab is visible.");
   }
 
   const doc = new jsPDF({
@@ -27,7 +26,6 @@ export const generatePDF = async (runDoc: RunDoc, customFilename?: string) => {
   // Since we are capturing browser rendering, we use a rasterization approach
   // via html2canvas (must be included in the environment or we can use a simpler 
   // implementation of the same concept). 
-  // For the sake of this expert refactor, we assume a canvas-capture of our canonical component.
   
   for (let i = 0; i < slides.length; i++) {
     const slideEl = slides[i] as HTMLElement;

@@ -1,8 +1,9 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useRunDoc } from '../../context/RunDocContext';
 import { Stage, StageStatus } from '../../types';
 import { Lock } from 'lucide-react';
+import ConfirmModal from './ConfirmModal';
 
 interface Props {
   stage: Stage;
@@ -12,15 +13,19 @@ interface Props {
 
 const LockGuard: React.FC<Props> = ({ stage, children, className = '' }) => {
   const { state, dispatch } = useRunDoc();
+  const [showUnlockConfirm, setShowUnlockConfirm] = useState(false);
+  
   const isApproved = state.stage_status[stage] === StageStatus.Approved;
 
   const handleUnlockRequest = (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
-    
-    if (window.confirm("This stage is approved and locked. Do you want to un-approve it to make edits?")) {
-      dispatch({ type: 'UNLOCK_STAGE', payload: stage });
-    }
+    setShowUnlockConfirm(true);
+  };
+
+  const confirmUnlock = () => {
+    dispatch({ type: 'UNLOCK_STAGE', payload: stage });
+    setShowUnlockConfirm(false);
   };
 
   return (
@@ -39,6 +44,16 @@ const LockGuard: React.FC<Props> = ({ stage, children, className = '' }) => {
              <span className="text-sm font-bold">Locked. Click to Edit</span>
           </div>
         </div>
+      )}
+
+      {showUnlockConfirm && (
+        <ConfirmModal 
+          title="Unlock Stage?"
+          message="This stage is approved and locked. Do you want to un-approve it to make edits?"
+          confirmLabel="Unlock"
+          onConfirm={confirmUnlock}
+          onCancel={() => setShowUnlockConfirm(false)}
+        />
       )}
     </div>
   );

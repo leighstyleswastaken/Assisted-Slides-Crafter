@@ -57,6 +57,7 @@ This document serves as the source of truth for all implemented features to prev
 
 ## Infrastructure & DX
 - [x] **PWA**: Fully installable with Service Worker caching for offline app loading.
+    - [x] **Manual Install Button**: Sidebar trigger to recover dismissed install prompts.
 - [x] **Global State Machine**: Redux-style reducer with single-atom state (`RunDoc`).
 - [x] **Persistence**: IndexedDB autosave with schema validation.
 - [x] **Quick Restore**: Load JSON projects directly from the welcome screen.

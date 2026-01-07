@@ -1,7 +1,6 @@
-
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useRunDoc } from '../../context/RunDocContext';
-import { Stage, Action, StageStatus, Asset, AssetKind } from '../../types';
+import { Stage, Action, StageStatus, Asset, AssetKind, Slide, OutlineItem, Branding } from '../../types';
 import { SlideSurface } from '../Renderer/SlideSurface';
 import { FileDown, Loader2, Presentation, Bot, CheckCircle2, Unlock, Bug, Gauge, Layout } from 'lucide-react';
 import { generatePPTX } from '../../services/pptxService';
@@ -13,7 +12,7 @@ import ConfirmModal from '../UI/ConfirmModal';
 import { StageScaffold } from '../Layout/StageScaffold';
 import { STAGE_NAMES } from '../../constants';
 // @ts-ignore
-import { FixedSizeList as List } from 'react-window';
+import { FixedSizeList as List, areEqual } from 'react-window';
 
 // Sub-components
 import ReviewModal from './Publisher/ReviewModal';
@@ -23,6 +22,51 @@ interface SelectableSuggestion {
   data: ReviewSuggestion;
   selected: boolean;
 }
+
+// --- List Row Component (Moved Outside to prevent Flicker) ---
+
+interface RowData {
+  slides: Slide[];
+  outline: OutlineItem[];
+  assets: Asset[];
+  branding: Branding;
+  polish: { noise: boolean; vignette: boolean };
+  onScrollTo: (index: number) => void;
+  currentIndex: number;
+}
+
+const ThumbnailRow = React.memo(({ index, style, data }: { index: number; style: React.CSSProperties; data: RowData }) => {
+  const slide = data.slides[index];
+  const outlineItem = data.outline.find(o => o.slide_id === slide.slide_id);
+  
+  return (
+    <div style={{ ...style, padding: '8px' }}>
+      <button 
+        onClick={() => data.onScrollTo(index)}
+        className="w-full h-full flex gap-3 p-2 bg-gray-900 border border-gray-800 rounded hover:bg-gray-800 hover:border-gray-700 transition-all text-left group relative overflow-hidden"
+      >
+        <div className="w-24 aspect-video bg-gray-950 rounded border border-gray-800 overflow-hidden shrink-0 relative">
+           {/* Mini Render */}
+           <div className="origin-top-left transform scale-[0.165]" style={{ width: '1920px', height: '1080px' }}>
+              <SlideSurface 
+                 slide={slide}
+                 assets={data.assets}
+                 branding={data.branding}
+                 mode="preview"
+                 polish={data.polish}
+              />
+           </div>
+           {/* Interaction overlay */}
+           <div className="absolute inset-0 bg-transparent group-hover:bg-white/5 transition-colors"></div>
+        </div>
+        <div className="flex-1 min-w-0 flex flex-col justify-center">
+           <span className="text-[10px] text-gray-500 font-mono mb-1">{String(index + 1).padStart(2, '0')}</span>
+           <span className="text-xs font-bold text-gray-300 truncate">{outlineItem?.title || slide.slide_id}</span>
+        </div>
+      </button>
+    </div>
+  );
+}, areEqual);
 
 const Stage5Publisher: React.FC = () => {
   const { state, dispatch, addNotification } = useRunDoc();
@@ -51,11 +95,32 @@ const Stage5Publisher: React.FC = () => {
   const [useProModel, setUseProModel] = useState(true);
   const [concurrency, setConcurrency] = useState(1);
 
+  // List Sizing
+  const listContainerRef = useRef<HTMLDivElement>(null);
+  const [listHeight, setListHeight] = useState(600);
+
   // Scroll ref for main view
   const mainScrollRef = useRef<HTMLDivElement>(null);
 
   const isApproved = state.stage_status[Stage.Publisher] === StageStatus.Approved;
   const isDraft = !isApproved;
+
+  // Measure List Container
+  useEffect(() => {
+    if (!listContainerRef.current) return;
+    
+    const updateSize = () => {
+        if (listContainerRef.current) {
+            setListHeight(listContainerRef.current.clientHeight);
+        }
+    };
+
+    updateSize();
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(listContainerRef.current);
+    
+    return () => observer.disconnect();
+  }, []);
 
   // Effects...
   useEffect(() => {
@@ -101,12 +166,26 @@ const Stage5Publisher: React.FC = () => {
 
   const handleExportPDF = async () => {
     setIsExportingPDF(true);
-    try { await generatePDF(state, getExportFilename('pdf')); } catch (e) { console.error(e); } finally { setIsExportingPDF(false); }
+    try { 
+        await generatePDF(state, getExportFilename('pdf')); 
+    } catch (e: any) { 
+        console.error(e); 
+        addNotification(e.message || "PDF Export Failed", 'error');
+    } finally { 
+        setIsExportingPDF(false); 
+    }
   };
 
   const handleExportPPTX = async () => {
     setIsExportingPPTX(true);
-    try { await generatePPTX(state, getExportFilename('pptx')); } catch (e) { console.error(e); } finally { setIsExportingPPTX(false); }
+    try { 
+        await generatePPTX(state, getExportFilename('pptx')); 
+    } catch (e: any) { 
+        console.error(e); 
+        addNotification(e.message || "PPTX Export Failed", 'error');
+    } finally { 
+        setIsExportingPPTX(false); 
+    }
   };
 
   const handleDownloadDebugLog = () => {
@@ -306,41 +385,16 @@ const Stage5Publisher: React.FC = () => {
 
   const isUpToDate = state.last_modified === lastAnalysed;
 
-  // -- Renderers --
-
-  // Row renderer for react-window
-  const ThumbnailRow = ({ index, style }: { index: number; style: React.CSSProperties }) => {
-    const slide = state.slides[index];
-    const outlineItem = state.outline.find(o => o.slide_id === slide.slide_id);
-    
-    return (
-      <div style={{ ...style, padding: '8px' }}>
-        <button 
-          onClick={() => scrollToSlide(index)}
-          className="w-full h-full flex gap-3 p-2 bg-gray-900 border border-gray-800 rounded hover:bg-gray-800 hover:border-gray-700 transition-all text-left group relative overflow-hidden"
-        >
-          <div className="w-24 aspect-video bg-gray-950 rounded border border-gray-800 overflow-hidden shrink-0 relative">
-             {/* Mini Render */}
-             <div className="origin-top-left transform scale-[0.165]" style={{ width: '1920px', height: '1080px' }}>
-                <SlideSurface 
-                   slide={slide}
-                   assets={state.asset_library}
-                   branding={state.branding}
-                   mode="preview"
-                   polish={polish}
-                />
-             </div>
-             {/* Interaction overlay */}
-             <div className="absolute inset-0 bg-transparent group-hover:bg-white/5 transition-colors"></div>
-          </div>
-          <div className="flex-1 min-w-0 flex flex-col justify-center">
-             <span className="text-[10px] text-gray-500 font-mono mb-1">{String(index + 1).padStart(2, '0')}</span>
-             <span className="text-xs font-bold text-gray-300 truncate">{outlineItem?.title || slide.slide_id}</span>
-          </div>
-        </button>
-      </div>
-    );
-  };
+  // Memoize data for the list so rows don't re-render unless this data changes
+  const itemData = useMemo(() => ({
+    slides: state.slides,
+    outline: state.outline,
+    assets: state.asset_library,
+    branding: state.branding,
+    polish: polish,
+    onScrollTo: scrollToSlide,
+    currentIndex: -1
+  }), [state.slides, state.outline, state.asset_library, state.branding, polish]);
 
   return (
     <StageScaffold
@@ -457,16 +511,20 @@ const Stage5Publisher: React.FC = () => {
             <div className="p-4 border-b border-gray-800 text-gray-400 font-mono text-sm font-bold uppercase tracking-wider flex items-center gap-2">
                <Layout size={16} /> Navigator
             </div>
-            <div className="flex-1">
-               <List
-                  height={800} // This will need to be dynamic in a real app (useResizeObserver), but 800 is a safe average for desktop
-                  itemCount={state.slides.length}
-                  itemSize={90} // Height of each row
-                  width="100%"
-                  className="no-scrollbar"
-               >
-                  {ThumbnailRow}
-               </List>
+            <div className="flex-1" ref={listContainerRef}>
+               {/* Explicit Height Container for react-window */}
+               {listHeight > 0 && (
+                  <List
+                     height={listHeight}
+                     itemCount={state.slides.length}
+                     itemSize={100} // Increased size slightly
+                     width="100%"
+                     itemData={itemData}
+                     className="no-scrollbar"
+                  >
+                     {ThumbnailRow}
+                  </List>
+               )}
             </div>
          </div>
       }

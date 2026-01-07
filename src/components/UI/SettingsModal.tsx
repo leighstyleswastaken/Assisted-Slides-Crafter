@@ -8,6 +8,7 @@ import { X, Save, Upload, Sliders, FileJson, Trash2, Loader2, AlertTriangle, Che
 import JSZip from 'jszip';
 // @ts-ignore
 import FileSaver from 'file-saver';
+import ConfirmModal from './ConfirmModal';
 
 // Handle CDN export discrepancies for file-saver
 const saveAs = (FileSaver && FileSaver.saveAs) ? FileSaver.saveAs : FileSaver;
@@ -17,7 +18,7 @@ interface Props {
 }
 
 const SettingsModal: React.FC<Props> = ({ onClose }) => {
-  const { state, dispatch } = useRunDoc();
+  const { state, dispatch, addNotification } = useRunDoc();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Tabs
@@ -37,9 +38,10 @@ const SettingsModal: React.FC<Props> = ({ onClose }) => {
   // Export State
   const [isZipping, setIsZipping] = useState(false);
 
-  // Reset State
+  // Reset/Template State
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showFactoryResetConfirm, setShowFactoryResetConfirm] = useState(false);
+  const [pendingTemplate, setPendingTemplate] = useState<any | null>(null);
 
   const handleExport = () => {
     // CRITICAL: Strip history stacks to prevent massive file bloat
@@ -122,7 +124,7 @@ const SettingsModal: React.FC<Props> = ({ onClose }) => {
         
     } catch (e) {
         console.error("Archive export failed", e);
-        alert("Failed to create archive. See console for details.");
+        addNotification("Failed to create archive. See console for details.", 'error');
     } finally {
         setIsZipping(false);
     }
@@ -264,12 +266,20 @@ const SettingsModal: React.FC<Props> = ({ onClose }) => {
   
   const handleLoadTemplate = (template: any) => {
      const hasWork = state.revisions.source > 0 || state.outline.length > 0 || state.asset_library.length > 0;
-     if (hasWork && !window.confirm("Load template? Current work will be lost.")) {
-        return;
+     if (hasWork) {
+        setPendingTemplate(template);
+     } else {
+        dispatch({ type: 'REHYDRATE', payload: template.data });
+        onClose();
      }
-     
-     dispatch({ type: 'REHYDRATE', payload: template.data });
-     onClose();
+  };
+
+  const confirmTemplateLoad = () => {
+     if (pendingTemplate) {
+        dispatch({ type: 'REHYDRATE', payload: pendingTemplate.data });
+        setPendingTemplate(null);
+        onClose();
+     }
   };
 
   const formatFileSize = (bytes: number) => {
@@ -286,6 +296,19 @@ const SettingsModal: React.FC<Props> = ({ onClose }) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+      
+      {/* Template Confirmation Modal Layer */}
+      {pendingTemplate && (
+         <ConfirmModal 
+            title="Overwrite Workspace?"
+            message="Loading this template will discard your current project. Are you sure you want to proceed?"
+            confirmLabel="Load Template"
+            isDestructive
+            onConfirm={confirmTemplateLoad}
+            onCancel={() => setPendingTemplate(null)}
+         />
+      )}
+
       <div className="bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
         
         <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-900">

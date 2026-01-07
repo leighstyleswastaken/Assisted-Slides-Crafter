@@ -16,8 +16,7 @@ export const downloadFontPack = async (fontNames: string[], projectId: string) =
   const uniqueFonts = [...new Set(fontNames.filter(f => f && f.trim() !== '' && f !== 'Inter' && f !== 'Arial' && f !== 'Helvetica' && f !== 'Sans-Serif'))];
   
   if (uniqueFonts.length === 0) {
-      alert("No custom Google Fonts detected in this brand (Inter/Arial are standard).");
-      return;
+      throw new Error("No custom Google Fonts detected in this brand (Inter/Arial are standard).");
   }
 
   // Helper to wait

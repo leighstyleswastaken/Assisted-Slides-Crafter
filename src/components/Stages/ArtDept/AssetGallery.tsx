@@ -6,6 +6,7 @@ import JSZip from 'jszip';
 // @ts-ignore
 import FileSaver from 'file-saver';
 import ConfirmModal from '../../UI/ConfirmModal';
+import { useRunDoc } from '../../../context/RunDocContext';
 
 // Handle CDN export discrepancies for file-saver
 const saveAs = (FileSaver && FileSaver.saveAs) ? FileSaver.saveAs : FileSaver;
@@ -255,7 +256,7 @@ const AssetGallery: React.FC<Props> = ({
   onReroll,
   onImport
 }) => {
-   
+   const { addNotification } = useRunDoc();
    const [zoomedAsset, setZoomedAsset] = useState<Asset | null>(null);
    const [isZipping, setIsZipping] = useState(false);
    const fileInputRef = useRef<HTMLInputElement>(null);
@@ -306,8 +307,7 @@ const AssetGallery: React.FC<Props> = ({
 
       } catch (e) {
          console.error("Zip failed", e);
-         // Simplified error handling per request
-         console.error("Failed to create zip archive.");
+         addNotification("Failed to create zip archive.", 'error');
       } finally {
          setIsZipping(false);
       }
@@ -335,7 +335,7 @@ const AssetGallery: React.FC<Props> = ({
       if (e.target.files && e.target.files[0]) {
          const file = e.target.files[0];
          if (!file.type.startsWith('image/')) {
-            alert('Please select a valid image file.');
+            addNotification('Please select a valid image file.', 'warning');
             return;
          }
 

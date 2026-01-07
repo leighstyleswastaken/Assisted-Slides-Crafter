@@ -9,7 +9,7 @@ import Stage2ArtDept from '../Stages/Stage2ArtDept';
 import Stage3Architect from '../Stages/Stage3Architect';
 import Stage4Copywriter from '../Stages/Stage4Copywriter';
 import Stage5Publisher from '../Stages/Stage5Publisher';
-import { Hammer, Brain, Palette, Layout, PenTool, Printer, Terminal, Settings, Rocket, Pause, Play, Square, X, Save, Activity, Undo2, Redo2, Zap, CloudOff, Info, AlertTriangle, CheckCircle, AlertCircle, GraduationCap, LogOut, Menu } from 'lucide-react';
+import { Hammer, Brain, Palette, Layout, PenTool, Printer, Terminal, Settings, Rocket, Pause, Play, Square, X, Save, Activity, Undo2, Redo2, Zap, CloudOff, Info, AlertTriangle, CheckCircle, AlertCircle, GraduationCap, LogOut, Menu, Download } from 'lucide-react';
 import ProgressTracker from '../DevTools/ProgressTracker';
 import UsageLogger from '../DevTools/UsageLogger';
 import WelcomeModal from '../UI/WelcomeModal';
@@ -145,10 +145,32 @@ const AppShell: React.FC = () => {
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
+  // PWA Install State
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  
   // Quota Monitoring
   const [tokenCount, setTokenCount] = useState({ input: 0, output: 0 });
 
   const isTutorial = state.project_id === 'tutorial_mode';
+
+  // PWA Install Handler
+  useEffect(() => {
+    const handler = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setDeferredPrompt(null);
+    }
+  };
 
   // Update token count periodically
   useEffect(() => {
@@ -348,6 +370,15 @@ const AppShell: React.FC = () => {
         </div>
 
         <div className="p-4 border-t border-gray-800 space-y-2">
+           {deferredPrompt && (
+              <button 
+                onClick={handleInstallClick}
+                className="flex items-center gap-2 text-xs text-green-400 hover:text-green-300 w-full p-2 rounded hover:bg-gray-800 transition-colors font-bold"
+              >
+                <Download size={14} />
+                <span>Install App</span>
+              </button>
+           )}
            <button 
              onClick={() => setShowUsage(true)}
              className="flex items-center gap-2 text-xs text-gray-500 hover:text-blue-400 w-full p-2 rounded hover:bg-gray-800 transition-colors"
