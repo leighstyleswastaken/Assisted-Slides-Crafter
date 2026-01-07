@@ -1,10 +1,11 @@
 
-const CACHE_NAME = 'asc-v8-cache-pngs';
+const CACHE_NAME = 'asc-v9-cache-public-folder';
 const URLS_TO_CACHE = [
   '/',
   '/index.html',
   '/index.tsx',
-  '/manifest.json'
+  '/public/manifest.json',
+  '/public/icon.svg'
 ];
 
 self.addEventListener('install', (event) => {

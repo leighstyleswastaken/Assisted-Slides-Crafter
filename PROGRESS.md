@@ -85,6 +85,11 @@
 - [x] Hidden DevTools for Clean UX
 - [x] **Tutorial Mode**: Interactive onboarding flow.
 
+## Phase 10: Infrastructure & Maintenance
+- [x] **Refactor: PWA Asset Organization (`/public` folder separation)**
+- [ ] Future Idea: Real-time Collaboration?
+- [ ] Future Idea: Video Generation Integration?
+
 ## Future Roadmap (Post-v3)
 - [ ] Real-time Audio Conversation (Gemini Live)
 - [ ] Video Backgrounds (Veo)
