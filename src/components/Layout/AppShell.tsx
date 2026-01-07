@@ -137,7 +137,6 @@ const AppShell: React.FC = () => {
   const { state, canNavigateTo, dispatch, yolo, notifications, removeNotification } = useRunDoc();
   
   // View State
-  const [showUsage, setShowUsage] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
@@ -386,13 +385,6 @@ const AppShell: React.FC = () => {
                 <span>Install App</span>
               </button>
            )}
-           <button 
-             onClick={() => setShowUsage(true)}
-             className="flex items-center gap-2 text-xs text-gray-500 hover:text-blue-400 w-full p-2 rounded hover:bg-gray-800 transition-colors"
-           >
-             <Activity size={14} />
-             <span>Usage Monitor</span>
-           </button>
         </div>
       </aside>
 
@@ -529,8 +521,6 @@ const AppShell: React.FC = () => {
             onCancel={() => setShowExitConfirm(false)}
          />
       )}
-      
-      {showUsage && <UsageLogger onClose={() => setShowUsage(false)} />}
       
       {showWelcome && <WelcomeModal onClose={handleCloseWelcome} />}
       
