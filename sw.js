@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'asc-v7-cache';
+const CACHE_NAME = 'asc-v8-cache-pngs';
 const URLS_TO_CACHE = [
   '/',
   '/index.html',
