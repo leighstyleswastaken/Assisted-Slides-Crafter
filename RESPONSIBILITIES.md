@@ -3,39 +3,45 @@
 
 ## State Management (`RunDocContext`, `runDocReducer`)
 **Responsibility**: Source of Truth.
-- Maintains the integrity of the `RunDoc` object.
-- Enforces state transitions (e.g., unlocking stages).
-- Handles hydration/dehydration from storage.
-- **New**: Manages ephemeral UI state (Toast Notifications).
+- **Slice Pattern**: The reducer is decomposed into `slideReducer` (content), `assetReducer` (library), and `globalReducer` (meta).
+- **History**: The main reducer manages the `undoStack` and `redoStack` for global time-travel.
+- **Persistence**: Handles hydration/dehydration from IndexedDB.
+- **Notifications**: Manages ephemeral UI alerts.
 - **Complexity**: High. Central hub of the application.
 
 ## AI Service (`geminiService`)
-**Responsibility**: Intelligence Provider.
-- Translates domain requests (e.g., "Make branding") into GenAI API calls.
-- Enforces JSON Schema on AI outputs to ensure type safety.
-- Handles model selection (Pro vs Flash).
-- **New**: Manages API Quota events (Event Bus) and Mock Mode switching.
+**Responsibility**: Intelligence Facade.
+- **Facade Pattern**: `geminiService.ts` acts as a single entry point, delegating to specialized agents in `src/services/ai/`.
+- **Agents**:
+  - `Strategist`: Text analysis and JSON structure.
+  - `Art`: Image generation prompts and calls.
+  - `Architect`: Layout heuristics.
+  - `Copywriter`: Text generation.
+- **Resilience**: `core.ts` handles API Quota events, Mock Mode fallback, and exponential backoff retries.
 - **Complexity**: Medium. Wraps external API complexity.
 
-## Prompt Engineering (`prompts.ts`)
-**Responsibility**: Personality & Instruction.
-- Contains the "System Instructions" for the various AI personas (Strategist, Art Director, Copywriter).
-- Ensures prompts include necessary context (e.g., passing Branding Chips to Art Dept).
-- **Complexity**: Low (Pure strings/functions), but high impact on quality.
+## Export Engine (`pptxService`, `pdfService`)
+**Responsibility**: High-Fidelity Output.
+- **Layer Architecture**: `pptxService` orchestrates specialized layer handlers (`layers.ts`) for Backgrounds, Grids, and Text to keep the logic clean.
+- **Rasterization**: `utils.ts` handles complex Canvas operations to bake Shape Masks and SVG filters into PNGs compatible with PowerPoint.
+- **Parity**: Ensures what you see on the `SlideSurface` matches the exported file pixel-for-pixel (PDF) or coordinate-for-coordinate (PPTX).
 
 ## Pipeline Orchestrator (`pipelineService`)
 **Responsibility**: Automation.
 - Executes the "YOLO Mode".
-- Chains multiple service calls together (Concept -> Image Gen -> Bg Removal -> Layout -> Copy).
-- Makes heuristic decisions when human input is skipped.
+- Chains the specialized AI agents together securely.
+- Manages the "Human-in-the-loop" interrupt logic (Pause/Stop).
 - **Complexity**: High. Managing async flows and race conditions.
 
-## Renderer (`SlideRenderer`)
-**Responsibility**: Visual Output.
+## Renderer (`SlideSurface`)
+**Responsibility**: The Visual Kernel.
 - Deterministic rendering of a slide based *only* on the data provided.
-- Must match HTML-to-PDF output exactly.
-- Handles "Polish" effects (Grain, Vignette).
-- **Complexity**: Medium. CSS composition and layering.
+- **Unified Engine**: Used by Stage 3 (Assets), Stage 4 (Text), Stage 5 (Preview), and PDF Generation.
+- **Sub-Systems**:
+  - `ShapeMaskLayer`: Procedural SVGs.
+  - `TransformableElement`: Interactive editing handles.
+  - `AutoFit`: Text scaling physics.
+- **Complexity**: High. CSS composition and layering.
 
 ## Font Service (`fontService`)
 **Responsibility**: Asset Acquisition.
@@ -45,7 +51,8 @@
 - **Complexity**: Medium. Handling blobs and async streams.
 
 ## UI Stages (`Stage1` - `Stage5`)
-**Responsibility**: Human-in-the-loop Interface.
+**Responsibility**: Human Interface.
 - Visualization of the current state.
 - Dispatching user intents to the Reducer.
+- **Refactored**: Complex UI logic (like the Asset Gallery or Layout Controls) is now extracted into sub-components for better maintainability and render performance.
 - **Complexity**: Medium. React component logic.

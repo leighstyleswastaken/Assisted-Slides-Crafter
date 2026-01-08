@@ -1,7 +1,7 @@
 
 import React from 'react';
-import { Wand2, Loader2, RefreshCw, Sparkles, Box, LayoutTemplate } from 'lucide-react';
-import { Asset, ImageConcept, Branding } from '../../../types';
+import { Wand2, Loader2, RefreshCw, Sparkles, Box, LayoutTemplate, BarChart } from 'lucide-react';
+import { Asset, ImageConcept, AssetKind } from '../../../types';
 import { useRunDoc } from '../../../context/RunDocContext';
 
 interface Props {
@@ -28,14 +28,17 @@ const ConceptBrief: React.FC<Props> = ({
   const { state } = useRunDoc();
   const visualTokens = [...(state.branding.keywords || []), ...(state.branding.visual_features || [])];
 
-  const getConceptBadge = (slideId: string) => {
-    if (slideId === 'kit_content') {
+  const getConceptBadge = (concept: ImageConcept) => {
+    if (concept.kind === AssetKind.Chart) {
+       return <span className="flex items-center gap-1 text-[10px] bg-emerald-900/50 text-emerald-300 px-1.5 py-0.5 rounded border border-emerald-500/30"><BarChart size={10}/> CHART</span>;
+    }
+    if (concept.slide_id === 'kit_content') {
        return <span className="flex items-center gap-1 text-[10px] bg-blue-900/50 text-blue-300 px-1.5 py-0.5 rounded border border-blue-500/30"><LayoutTemplate size={10}/> CONTENT BG</span>;
     }
-    if (slideId === 'kit_deco') {
+    if (concept.slide_id === 'kit_deco') {
        return <span className="flex items-center gap-1 text-[10px] bg-amber-900/50 text-amber-300 px-1.5 py-0.5 rounded border border-amber-500/30"><Box size={10}/> DECO KIT</span>;
     }
-    return <span className="text-[10px] bg-gray-800 px-1.5 py-0.5 rounded text-gray-400 font-mono">{slideId}</span>;
+    return <span className="text-[10px] bg-gray-800 px-1.5 py-0.5 rounded text-gray-400 font-mono">{concept.slide_id}</span>;
   };
 
   return (
@@ -93,7 +96,7 @@ const ConceptBrief: React.FC<Props> = ({
              {concepts.map((concept, i) => (
                 <div key={i} className="p-3 bg-gray-900 border border-gray-800 rounded group hover:border-purple-500/50 transition-colors">
                    <div className="flex justify-between items-start mb-2">
-                      {getConceptBadge(concept.slide_id)}
+                      {getConceptBadge(concept)}
                       <span className="text-[10px] text-gray-500 uppercase">{concept.kind}</span>
                    </div>
                    <p className="text-xs text-gray-300 mb-2 line-clamp-3">{concept.visual_prompt}</p>

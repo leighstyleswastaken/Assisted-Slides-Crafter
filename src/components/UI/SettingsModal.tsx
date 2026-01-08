@@ -1,10 +1,10 @@
 
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { useRunDoc } from '../../context/RunDocContext';
 import { validateRunDoc } from '../../services/validationService';
-import { saveProject, clearProject } from '../../services/persistenceService';
+import { saveProject, clearProject, getProjectSize } from '../../services/persistenceService';
 import { TEMPLATES } from '../../templates';
-import { X, Save, Upload, Sliders, FileJson, Trash2, Loader2, AlertTriangle, CheckCircle, Tag, PlusSquare, LayoutTemplate, ToggleLeft, ToggleRight, Sparkles, RefreshCw, Archive, Package } from 'lucide-react';
+import { X, Save, Upload, Sliders, FileJson, Trash2, Loader2, AlertTriangle, CheckCircle, Tag, PlusSquare, LayoutTemplate, ToggleLeft, ToggleRight, Sparkles, RefreshCw, Archive, Package, Database } from 'lucide-react';
 import JSZip from 'jszip';
 // @ts-ignore
 import FileSaver from 'file-saver';
@@ -18,7 +18,7 @@ interface Props {
 }
 
 const SettingsModal: React.FC<Props> = ({ onClose }) => {
-  const { state, dispatch, addNotification } = useRunDoc();
+  const { state, dispatch, addNotification, yolo } = useRunDoc();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Tabs
@@ -37,32 +37,57 @@ const SettingsModal: React.FC<Props> = ({ onClose }) => {
 
   // Export State
   const [isZipping, setIsZipping] = useState(false);
+  const [storageSize, setStorageSize] = useState<number | null>(null);
 
   // Reset/Template State
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showFactoryResetConfirm, setShowFactoryResetConfirm] = useState(false);
   const [pendingTemplate, setPendingTemplate] = useState<any | null>(null);
 
-  const handleExport = () => {
-    // CRITICAL: Strip history stacks to prevent massive file bloat
-    const { undoStack, redoStack, history, ...cleanState } = state;
-    
-    // We optionally allow keeping the event history log (metadata), but drop the full state stacks
-    const exportData = {
-        ...cleanState,
-        // Reset history stacks on export for the file
-        undoStack: [],
-        redoStack: [],
-        history: { events: history.events.slice(-50) } // Keep last 50 meta-events only
-    };
+  // Fetch size on mount and tab change, but SKIP if YOLO is running to prevent DB locking
+  useEffect(() => {
+     if (activeTab === 'data') {
+        if (yolo.isRunning) {
+            setStorageSize(-1); // Indicator for unavailable/paused
+        } else {
+            getProjectSize().then(setStorageSize);
+        }
+     }
+  }, [activeTab, yolo.isRunning]);
 
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData));
-    const downloadAnchorNode = document.createElement('a');
-    downloadAnchorNode.setAttribute("href", dataStr);
-    downloadAnchorNode.setAttribute("download", `asc_project_${state.project_id}.json`);
-    document.body.appendChild(downloadAnchorNode);
-    downloadAnchorNode.click();
-    downloadAnchorNode.remove();
+  const handleExport = () => {
+    try {
+      // CRITICAL: Strip history stacks to prevent massive file bloat
+      const { undoStack, redoStack, history, ...cleanState } = state;
+      
+      // We optionally allow keeping the event history log (metadata), but drop the full state stacks
+      const exportData = {
+          ...cleanState,
+          // Reset history stacks on export for the file
+          undoStack: [],
+          redoStack: [],
+          history: { events: history.events.slice(-50) } // Keep last 50 meta-events only
+      };
+
+      // Use Blob + URL.createObjectURL to avoid "RangeError: Invalid string length" or UI Freezing
+      // caused by huge base64 strings in data URIs.
+      const jsonString = JSON.stringify(exportData, null, 2);
+      const blob = new Blob([jsonString], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      
+      const downloadAnchorNode = document.createElement('a');
+      downloadAnchorNode.href = url;
+      downloadAnchorNode.download = `asc_project_${state.project_id}.json`;
+      document.body.appendChild(downloadAnchorNode);
+      downloadAnchorNode.click();
+      downloadAnchorNode.remove();
+      
+      // Revoke the object URL to free memory
+      setTimeout(() => URL.revokeObjectURL(url), 100);
+    } catch (e) {
+      console.error("Export Failed", e);
+      addNotification("Export Failed. Project might be too large.", 'error');
+    }
   };
 
   const handleExportArchive = async () => {
@@ -438,8 +463,14 @@ const SettingsModal: React.FC<Props> = ({ onClose }) => {
 
            {activeTab === 'data' && (
              <div className="space-y-6">
-                <div className="flex justify-between items-center">
-                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Project Data</h3>
+                <div className="flex justify-between items-center bg-gray-900/50 p-3 rounded-lg border border-gray-800">
+                    <div>
+                        <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2"><Database size={14}/> Storage Usage</h3>
+                        <p className="text-[10px] text-gray-500 mt-1">Local Browser Database (IndexedDB)</p>
+                    </div>
+                    <span className={`text-sm font-mono font-bold ${storageSize === -1 ? 'text-gray-500' : (storageSize && storageSize > 50000000) ? 'text-red-400' : 'text-green-400'}`}>
+                       {storageSize === -1 ? 'Available after Generation' : storageSize ? formatFileSize(storageSize) : 'Calculating...'}
+                    </span>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

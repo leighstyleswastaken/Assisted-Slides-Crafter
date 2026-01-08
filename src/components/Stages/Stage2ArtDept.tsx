@@ -1,11 +1,12 @@
 
 import React, { useState } from 'react';
 import { useRunDoc } from '../../context/RunDocContext';
-import { Stage, StageStatus, Asset, ImageConcept } from '../../types';
+import { Stage, StageStatus, Asset, ImageConcept, AssetKind } from '../../types';
 import { generateImageConcepts, generateAssetImage } from '../../services/geminiService';
 import { removeBackgroundMagicWand, removeBackgroundAI, removeBackgroundColorKey, compressImage } from '../../services/imageProcessingService';
 import { ArrowRight, Unlock, GraduationCap } from 'lucide-react';
 import ConfirmModal from '../UI/ConfirmModal';
+import { generateGhostChart, extractChartDataFromText } from '../../services/chartRenderer';
 
 // Sub-components
 import ConceptBrief from './ArtDept/ConceptBrief';
@@ -60,19 +61,55 @@ const Stage2ArtDept: React.FC = () => {
     
     try {
        dispatch({ type: 'UPDATE_ASSET', payload: { id: newAssetId, status: 'generating' } });
-       const base64Image = await generateAssetImage(concept.visual_prompt, concept.kind, getImageModel());
+       
+       let base64Image = '';
+       
+       // SPECIAL CHART LOGIC (Image-to-Image)
+       if (concept.kind === AssetKind.Chart) {
+          // 1. Extract Data (Try to get from key facts or just from prompt context)
+          const contextText = `${concept.visual_prompt} ${state.branding.key_facts?.join(' ') || ''}`;
+          const chartData = extractChartDataFromText(contextText);
+          
+          // 2. Generate Ghost Chart (High Contrast B&W)
+          const ghostBase64 = generateGhostChart(chartData);
+          
+          // 3. Call AI with Reference
+          // We pass the ghost image to Gemini to "style" it while keeping the structure
+          base64Image = await generateAssetImage(
+             concept.visual_prompt, 
+             concept.kind, 
+             getImageModel(), 
+             ghostBase64
+          );
+          
+          // Store chart data for potential future re-generation
+          newAsset.chart_data = chartData;
+          
+       } else {
+          // STANDARD GENERATION
+          base64Image = await generateAssetImage(concept.visual_prompt, concept.kind, getImageModel());
+       }
        
        // Optimization: Compress immediately to WebP (0.8 quality) to save RAM and IDB space
        const compressedUri = await compressImage(base64Image, 0.8, 'image/webp');
+
+       // Auto-remove background for stamps created via charts to ensure they sit well
+       let finalUri = compressedUri;
+       let isTransparent = false;
+       
+       // Optional: Auto-remove background for charts if desired, though often full bleed charts look cool.
+       // We'll leave it manual for now unless it's a specific 'Stamp' type.
 
        dispatch({ 
          type: 'UPDATE_ASSET', 
          payload: { 
             id: newAssetId, 
             status: 'completed', 
-            uri: compressedUri,
-            original_uri: compressedUri,
-            mime: 'image/webp' as any // Updating mime to match compression
+            uri: finalUri,
+            original_uri: finalUri,
+            mime: 'image/webp' as any,
+            transparent: isTransparent,
+            chart_data: newAsset.chart_data
          } 
        });
     } catch (e) {
@@ -202,8 +239,16 @@ const Stage2ArtDept: React.FC = () => {
     setGeneratingAssets(prev => ({ ...prev, [asset.id]: true }));
 
     try {
-      const base64Image = await generateAssetImage(asset.prompt, asset.kind, getImageModel());
-      // Compress Reroll too
+      let base64Image = '';
+      
+      // If we have chart data, re-use the ghost for structure
+      if (asset.chart_data && asset.kind === AssetKind.Chart) {
+          const ghostBase64 = generateGhostChart(asset.chart_data);
+          base64Image = await generateAssetImage(asset.prompt, asset.kind, getImageModel(), ghostBase64);
+      } else {
+          base64Image = await generateAssetImage(asset.prompt, asset.kind, getImageModel());
+      }
+
       const compressedUri = await compressImage(base64Image, 0.8, 'image/webp');
 
       dispatch({ 

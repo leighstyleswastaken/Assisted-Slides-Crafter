@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Sparkles, CheckSquare, Square, Wand2, Loader2 } from 'lucide-react';
+import { Sparkles, CheckSquare, Square, Wand2, Loader2, BrainCircuit } from 'lucide-react';
 import { Action, Asset } from '../../../types';
 import { ReviewSuggestion } from '../../../services/reviewerService';
 
@@ -11,7 +11,7 @@ interface SelectableSuggestion {
 
 interface Props {
   suggestions: SelectableSuggestion[];
-  assets: Asset[]; // Needed for image previews
+  assets: Asset[];
   isApplying: boolean;
   onToggle: (index: number) => void;
   onApply: () => void;
@@ -27,15 +27,9 @@ const ReviewModal: React.FC<Props> = ({
   onDiscard 
 }) => {
 
-  // --- Helper Functions (Refactored for Safety) ---
-
   const getActionContext = (action: Action | any) => {
-    // 1. Safety Check: Ensure payload exists
     if (!action || !action.payload) return 'Unknown Action';
-
     const { slideId } = action.payload;
-    // We don't have access to slide index here easily without passing full state, 
-    // so we'll use the ID or a generic label.
     const slideLabel = slideId ? `Slide ${slideId}` : 'Global';
 
     if (action.type === 'UPDATE_TEXT_CONTENT') {
@@ -49,9 +43,6 @@ const ReviewModal: React.FC<Props> = ({
     if (action.type === 'REQUEST_NEW_ASSET') {
        const kind = action.payload.kind || 'Asset';
        return `${slideLabel} • NEW ${kind.toUpperCase()}`;
-    }
-    if (action.type === 'UPDATE_TEXT_ALIGNMENT') {
-       return `${slideLabel} • ALIGNMENT`;
     }
     return slideLabel;
   };
@@ -69,8 +60,17 @@ const ReviewModal: React.FC<Props> = ({
     if (action.type === 'UPDATE_ZONE') {
         const assetId = action.payload.assetId;
         if (!assetId) return <div className="mt-2 text-[10px] text-red-400">Invalid Asset ID</div>;
-
         const asset = assets.find(a => a.id === assetId);
+        
+        // Handle missing asset gracefully (even if service filtered it, UI state might lag)
+        if (!asset) {
+            return (
+                <div className="mt-2 text-[10px] text-yellow-500 font-mono bg-gray-950 p-2 rounded border border-yellow-900/30">
+                    Asset ID {assetId.slice(-6)} not found (will be skipped).
+                </div>
+            );
+        }
+        
         return (
           <div className="mt-2 flex items-center gap-2 text-[10px] font-mono bg-gray-950 p-2 rounded border border-gray-800 text-blue-300">
              {asset && <img src={asset.uri} className="w-6 h-6 rounded object-cover" alt="Preview"/>}
@@ -135,14 +135,32 @@ const ReviewModal: React.FC<Props> = ({
                           <span className={`text-xs font-bold font-mono mb-1 ${item.selected ? 'text-blue-400' : 'text-gray-600'}`}>
                              {getActionContext(item.data.action)}
                           </span>
-                          <span className={`text-[9px] px-1.5 rounded uppercase font-bold tracking-wider ${item.selected ? 'bg-purple-900/30 text-purple-300' : 'bg-gray-800 text-gray-600'}`}>
-                             {(item.data.action.type || 'UNKNOWN').replace('UPDATE_', '').replace('REQUEST_', '').replace(/_/g, ' ')}
-                          </span>
+                          <div className="flex items-center gap-2">
+                             {item.data.confidence && (
+                                <span className={`text-[9px] px-1.5 rounded uppercase font-bold tracking-wider ${
+                                   item.data.confidence === 'high' ? 'bg-green-900/30 text-green-400' : 
+                                   item.data.confidence === 'medium' ? 'bg-yellow-900/30 text-yellow-400' : 
+                                   'bg-gray-800 text-gray-500'
+                                }`}>
+                                   {item.data.confidence}
+                                </span>
+                             )}
+                             <span className={`text-[9px] px-1.5 rounded uppercase font-bold tracking-wider ${item.selected ? 'bg-purple-900/30 text-purple-300' : 'bg-gray-800 text-gray-600'}`}>
+                                {(item.data.action.type || 'UNKNOWN').replace('UPDATE_', '').replace('REQUEST_', '').replace(/_/g, ' ')}
+                             </span>
+                          </div>
                        </div>
                        <p className={`text-sm leading-relaxed ${item.selected ? 'text-gray-200' : 'text-gray-500'}`}>
                           {item.data.description}
                        </p>
-                       {/* Render Change Preview */}
+                       
+                       {item.data.reasoning && item.selected && (
+                          <div className="mt-2 flex items-start gap-1.5 text-[10px] text-gray-400 italic">
+                             <BrainCircuit size={12} className="shrink-0 mt-0.5 opacity-50"/>
+                             {item.data.reasoning}
+                          </div>
+                       )}
+
                        {item.selected && renderActionPreview(item.data.action)}
                     </div>
                  </div>

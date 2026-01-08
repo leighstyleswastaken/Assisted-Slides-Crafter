@@ -1,5 +1,5 @@
 
-# Assisted Slides Crafter v3.0
+# Assisted Slides Crafter v3.2
 
 Assisted Slides Crafter (ASC) is a "glass box" AI presentation engine that prioritizes human curation over blind automation. It features a strict 5-stage pipeline—Strategist, Art Dept, Architect, Copywriter, and Publisher—ensuring professional, deterministic output.
 
@@ -18,6 +18,18 @@ Jumpstart projects with pre-configured narrative structures:
 -   **Educational**: Goals, Concepts, Case Studies, Takeaways.
 -   **Status Report**: Metrics, Blockers, Roadmap (Data-heavy).
 -   **Narrative**: Hero's Journey arc for emotional storytelling.
+
+### 🧠 Data & Visual Intelligence (New)
+-   **Magic Palette**: Upload a logo or reference image, and the Strategist automatically extracts the dominant color palette and calculates optimal contrast.
+-   **Brand Kits**: One-click application of curated aesthetic presets (Tech, Eco, Luxury, Pop) to instantly style the deck.
+-   **Fact Extraction**: The Strategist automatically pulls key statistics and numbers from source text.
+-   **Chart Synthesis**: The Art Dept identifies data-heavy slides and generates flat-vector chart assets.
+
+### 🎨 Modern Composition Engine
+-   **Shape Masks**: Apply procedural SVG shapes (Waves, Blobs, Arcs, Diagonals) to background layers.
+-   **Cinematic Effects (New)**: Bring static images to life with "Slow Pan" and "Zoom" motion effects and premium depth-aware drop shadows.
+-   **Smart Contrast (New)**: Automatic text color adjustment based on background luminance calculation (WCAG compliant).
+-   **Layered Depth**: Support for "Peek" assets that sit behind shape masks, creating dynamic, multi-plane slide designs.
 
 ### 🛠️ PWA & Offline Support
 -   **Installable**: Runs as a native desktop/mobile app via Chrome/Edge.
@@ -55,6 +67,7 @@ The application is designed to work immediately without configuration:
 -   **[FEATURES.md](FEATURES.md)**: Comprehensive feature list.
 -   **[PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md)**: File manifest.
 -   **[docs/AGENT_PROTOCOL.md](docs/AGENT_PROTOCOL.md)**: System prompt definitions.
+-   **[DATA_MODEL.md](DATA_MODEL.md)**: JSON Schema definition.
 
 ## Technology Stack
 -   **Frontend**: React 18, TypeScript, Tailwind CSS.

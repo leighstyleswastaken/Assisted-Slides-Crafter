@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRunDoc } from '../../context/RunDocContext';
 import { Stage, StageStatus, TextLayout, TextAlign, VerticalAlign, BoxTransform } from '../../types';
@@ -132,10 +133,13 @@ const Stage4Copywriter: React.FC = () => {
       title="Copywriter"
       step="04"
       description="Refine messaging and fit text to layout."
+      mobileTabs={{ sidebar: 'Slides', rightPanel: 'Edit' }}
       actions={
         isApproved ? (
           <div className="flex items-center gap-2">
-            <div className="px-4 py-2 bg-gray-900 border border-green-900/50 text-green-400 rounded-full text-xs font-mono font-bold">LOCKED & APPROVED</div>
+            <div className="px-3 py-1.5 md:px-4 md:py-2 bg-gray-900 border border-green-900/50 text-green-400 rounded-full text-[10px] md:text-xs font-mono font-bold">
+               <span className="hidden md:inline">LOCKED & APPROVED</span><span className="md:hidden">LOCKED</span>
+            </div>
             <button onClick={() => dispatch({ type: 'UNLOCK_STAGE', payload: Stage.Copywriter })} className="p-2 text-gray-500 hover:text-white"><Unlock size={16} /></button>
           </div>
         ) : (
@@ -143,12 +147,13 @@ const Stage4Copywriter: React.FC = () => {
             <button 
                onClick={handleGenerateAll} 
                disabled={isGeneratingAll} 
-               className="px-4 py-2 bg-gray-800 hover:bg-pink-900/30 text-pink-300 border border-pink-900/30 rounded font-bold text-xs flex items-center gap-2 shadow-lg disabled:opacity-50"
+               className="px-3 py-2 md:px-4 md:py-2 bg-gray-800 hover:bg-pink-900/30 text-pink-300 border border-pink-900/30 rounded font-bold text-xs flex items-center gap-2 shadow-lg disabled:opacity-50"
             >
                {isGeneratingAll ? <Loader2 className="animate-spin" size={16}/> : <Wand2 size={16}/>}
-               {isMock ? 'Simulate All Copy' : 'Generate All Copy'}
+               <span className="hidden md:inline">{isMock ? 'Simulate All Copy' : 'Generate All Copy'}</span>
+               <span className="md:hidden">Generate All</span>
             </button>
-            <button onClick={() => dispatch({ type: 'APPROVE_STAGE', payload: Stage.Copywriter })} className="px-6 py-2.5 bg-green-600 hover:bg-green-500 text-white rounded font-bold transition-all flex items-center gap-2 shadow-lg">Approve Copy <ArrowRight size={16} /></button>
+            <button onClick={() => dispatch({ type: 'APPROVE_STAGE', payload: Stage.Copywriter })} className="px-4 py-2 md:px-6 md:py-2.5 bg-green-600 hover:bg-green-500 text-white rounded font-bold transition-all flex items-center gap-2 shadow-lg text-xs md:text-sm">Approve <span className="hidden md:inline">Copy</span> <ArrowRight size={16} /></button>
           </>
         )
       }
@@ -158,14 +163,16 @@ const Stage4Copywriter: React.FC = () => {
           <div className="flex-1 overflow-y-auto p-2 space-y-1">
             {state.slides.map((slide, index) => {
               const outlineItem = state.outline.find(o => o.slide_id === slide.slide_id);
+              const title = outlineItem?.title || slide.slide_id;
               return (
                 <button
                   key={slide.slide_id}
                   onClick={() => { setActiveSlideId(slide.slide_id); setActiveField(null); }}
+                  title={title}
                   className={`w-full text-left p-3 rounded flex items-center gap-3 transition-colors ${activeSlideId === slide.slide_id ? 'bg-pink-900/20 border border-pink-500/30 text-pink-100' : 'text-gray-400 hover:bg-gray-800'}`}
                 >
                   <span className="font-mono text-xs opacity-50">{String(index + 1).padStart(2, '0')}</span>
-                  <span className="text-sm truncate font-medium block">{outlineItem?.title || slide.slide_id}</span>
+                  <span className="text-sm truncate font-medium block">{title}</span>
                 </button>
               );
             })}
@@ -274,7 +281,8 @@ const Stage4Copywriter: React.FC = () => {
           {!isApproved && (
             <button onClick={handleGenerateCopy} disabled={isGenerating} className="flex items-center gap-2 text-xs bg-pink-600 hover:bg-pink-500 text-white px-3 py-1.5 rounded transition-colors shadow-lg">
               {isGenerating ? <Loader2 className="animate-spin" size={14} /> : isMock ? <CloudOff size={14} /> : <Sparkles size={14} />} 
-              {isMock ? 'Simulate Rewrite' : 'AI Rewrite'}
+              <span className="hidden sm:inline">{isMock ? 'Simulate Rewrite' : 'AI Rewrite'}</span>
+              <span className="sm:hidden">Rewrite</span>
             </button>
           )}
         </div>

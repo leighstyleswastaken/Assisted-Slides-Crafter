@@ -22,11 +22,13 @@ The application state is serialized into a single JSON object called the `RunDoc
 | `fonts` | String[] | Google Font families. |
 | `keywords` | String[] | Semantic tags extracted from source. |
 | `visual_features` | String[] | Concrete visual elements to guide Art Dept. |
+| `key_facts` | String[] | (New) Extracted statistics and numbers. |
+| `data_visualizations` | String[] | (New) Descriptions of suggested charts. |
 
 ## Sub-Entity: `Asset`
 | Field | Type | Description |
 |-------|------|-------------|
-| `kind` | Enum | `background`, `stamp`, `texture`. |
+| `kind` | Enum | `background`, `stamp`, `texture`, `chart` (New), `peek` (New). |
 | `uri` | String | Base64 data URI of the image. |
 | `transparent` | Boolean | Whether background has been removed. |
 | `keep` | Boolean | User flag to prevent garbage collection. |
@@ -45,6 +47,15 @@ The actual content of a slide.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `zones` | Map<ZoneId, AssetRef> | Mapping of 3x3 grid zones to Asset IDs. |
+| `zones` | Map<ZoneId, Zone> | Mapping of 3x3 grid zones to Zone configurations. |
 | `text_layout` | Enum | The chosen text overlay strategy (e.g. `headline_body`). |
 | `text_content` | Map<String, String> | The actual copy (headline, body, etc.). |
+
+## Sub-Entity: `Zone`
+| Field | Type | Description |
+|-------|------|-------------|
+| `asset_id` | String | ID of the asset in this zone. |
+| `content_fit` | Enum | `cover` (Crop), `contain` (Box), `fill` (Space). |
+| `shape_mask` | Object | `{ type: 'wave'|'blob'..., intensity, color, flip }` |
+| `peek_asset_id` | String | ID of the secondary background showing through the mask. |
+| `image_effect` | Object | (New) `{ shadow: 'none'|'subtle'..., motion: 'none'|'pan'|'zoom' }` |

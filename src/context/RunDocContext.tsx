@@ -7,6 +7,7 @@ import { loadProject, saveProject } from '../services/persistenceService';
 import LoadingScreen from '../components/UI/LoadingScreen';
 import { runYoloPipeline, YoloControl } from '../services/pipelineService';
 import { GeminiEvents } from '../services/geminiService';
+import { validateRunDoc } from '../services/validationService';
 
 interface RunDocContextType {
   state: RunDoc;
@@ -23,6 +24,7 @@ interface RunDocContextType {
     isActive: boolean; // Is Modal Open?
     isRunning: boolean; // Is Pipeline Executing?
     isPaused: boolean;
+    isStopping: boolean; // Is Gracefully Stopping?
     status: string;
     open: () => void; // Open Modal (Pre-flight)
     start: () => void; // Start Pipeline
@@ -44,6 +46,7 @@ export const RunDocProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const [yoloActive, setYoloActive] = useState(false);
   const [yoloRunning, setYoloRunning] = useState(false);
   const [yoloPaused, setYoloPaused] = useState(false);
+  const [yoloStopping, setYoloStopping] = useState(false);
   const [yoloStatus, setYoloStatus] = useState("");
   
   // Refs to maintain state access inside the async pipeline
@@ -104,36 +107,52 @@ export const RunDocProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   // Initial Load (Async)
   useEffect(() => {
     const init = async () => {
-      const savedDoc = await loadProject();
-      
-      // 1. Check for API Key validity immediately
-      const key = process.env.API_KEY;
-      const isMissingKey = !key || key.trim() === '';
-      
-      if (savedDoc) {
-        console.log("Rehydrated project from IndexedDB");
-        // If we are missing a key, force the rehydrated doc to have mockMode = true
-        if (isMissingKey) {
-            savedDoc.ai_settings.mockMode = true;
-        }
-        dispatch({ type: 'REHYDRATE', payload: savedDoc });
-      } else {
-        console.log("No saved project found, using default.");
-        // If missing key, ensure default is mock mode
-        if (isMissingKey) {
-            dispatch({ type: 'UPDATE_AI_SETTINGS', payload: { mockMode: true } });
-        }
-      }
+      try {
+        // Load raw data first
+        const rawData = await loadProject();
+        
+        // Check for API Key
+        const key = process.env.API_KEY;
+        const isMissingKey = !key || key.trim() === '';
 
-      if (isMissingKey && !hasShownMockToast.current) {
-          // Delay slightly to let UI mount
-          setTimeout(() => {
-             addNotification("Welcome to the Demo! No API Key detected, using simulated AI.", "success");
-             hasShownMockToast.current = true;
-          }, 1000);
-      }
+        if (rawData) {
+          console.log("Rehydrated project from IndexedDB");
+          // Validate before hydrating
+          const { valid, errors } = validateRunDoc(rawData);
+          
+          if (!valid) {
+             console.error("Corrupted Save Detected:", errors);
+             const repaired = { ...INITIAL_RUN_DOC, ...rawData };
+             
+             // Ensure critical arrays exist
+             if (!repaired.slides) repaired.slides = [];
+             if (!repaired.outline) repaired.outline = [];
+             if (!repaired.asset_library) repaired.asset_library = [];
+             
+             dispatch({ type: 'REHYDRATE', payload: repaired });
+             addNotification("Project recovered in Safe Mode. Some data may be lost.", "warning");
+          } else {
+             if (isMissingKey) rawData.ai_settings.mockMode = true;
+             dispatch({ type: 'REHYDRATE', payload: rawData });
+          }
+        } else {
+          console.log("No saved project found, using default.");
+          if (isMissingKey) dispatch({ type: 'UPDATE_AI_SETTINGS', payload: { mockMode: true } });
+        }
 
-      setIsLoading(false);
+        if (isMissingKey && !hasShownMockToast.current) {
+            setTimeout(() => {
+               addNotification("Welcome to the Demo! No API Key detected, using simulated AI.", "success");
+               hasShownMockToast.current = true;
+            }, 1000);
+        }
+      } catch (e) {
+        console.error("Critical Init Failure", e);
+        dispatch({ type: 'RESET_PROJECT' });
+        addNotification("Fatal error loading project. Workspace reset.", "error");
+      } finally {
+        setIsLoading(false);
+      }
     };
     init();
   }, [addNotification]);
@@ -143,8 +162,6 @@ export const RunDocProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     if (isLoading) return; // Don't save before load completes
 
     const timeoutId = setTimeout(() => {
-      // Create a clean copy for storage (optional: remove stacks if we don't want persistent history)
-      // For now, we save everything including history to be helpful on refresh.
       saveProject(state);
     }, 2000);
 
@@ -154,6 +171,12 @@ export const RunDocProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   // Global Keyboard Shortcuts (Undo/Redo)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+        // Don't hijack input if user is typing
+        const tagName = (document.activeElement as HTMLElement)?.tagName;
+        const isEditable = tagName === 'INPUT' || tagName === 'TEXTAREA' || (document.activeElement as HTMLElement)?.isContentEditable;
+        
+        if (isEditable) return;
+
         // Check for Cmd+Z or Ctrl+Z
         if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
             e.preventDefault();
@@ -182,6 +205,7 @@ export const RunDocProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     setYoloActive(true);
     setYoloRunning(false);
     setYoloPaused(false);
+    setYoloStopping(false);
     setYoloStatus("Ready to launch");
     // Reset control ref just in case
     yoloControlRef.current = { isPaused: false, isAborted: false, resumeResolver: null };
@@ -190,22 +214,23 @@ export const RunDocProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const startYoloPipeline = async () => {
     setYoloRunning(true);
     setYoloPaused(false);
+    setYoloStopping(false);
     yoloControlRef.current = { isPaused: false, isAborted: false, resumeResolver: null };
     
     try {
       await runYoloPipeline(state, dispatch, setYoloStatus, yoloControlRef.current);
       setYoloStatus("Mission Complete");
     } catch (e) {
-      console.error("Yolo Aborted or Failed", e);
       if ((e as Error).message === "YOLO Pipeline Aborted") {
          setYoloStatus("Aborted");
       } else {
+         console.error("Yolo Failed", e);
          setYoloStatus("Error: " + (e as Error).message);
       }
     } finally {
       setYoloRunning(false);
       setYoloPaused(false);
-      // Note: We leave yoloActive=true so user can see "Mission Complete" or Error, then close manually.
+      setYoloStopping(false);
     }
   };
 
@@ -226,21 +251,21 @@ export const RunDocProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   };
 
   const stopYolo = () => {
+    setYoloStopping(true);
+    setYoloStatus("Stopping...");
     yoloControlRef.current.isAborted = true;
-    // If paused, we must resolve so it can exit
     if (yoloControlRef.current.resumeResolver) {
       yoloControlRef.current.resumeResolver();
     }
-    // We don't close immediately here, pipeline finally block handles running state
   };
 
   const closeYolo = () => {
-    // Force stop if running
     if (yoloRunning) {
         stopYolo();
     }
     setYoloActive(false);
     setYoloRunning(false);
+    setYoloStopping(false);
   };
 
   if (isLoading) {
@@ -259,6 +284,7 @@ export const RunDocProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         isActive: yoloActive,
         isRunning: yoloRunning,
         isPaused: yoloPaused,
+        isStopping: yoloStopping,
         status: yoloStatus,
         open: openYolo,
         start: startYoloPipeline,

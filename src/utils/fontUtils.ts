@@ -1,8 +1,9 @@
+
 /**
  * Dynamically loads Google Fonts by injecting a <link> tag into the head.
  * @param fonts Array of font family names (e.g., ['Roboto', 'Open Sans'])
  */
-export const loadGoogleFonts = (fonts: string[]) => {
+export const loadGoogleFonts = async (fonts: string[]) => {
   if (!fonts || fonts.length === 0) return;
 
   // Filter out duplicate or standard fonts that might break the API query
@@ -19,5 +20,14 @@ export const loadGoogleFonts = (fonts: string[]) => {
     link.rel = 'stylesheet';
     document.head.appendChild(link);
     console.log(`Loaded fonts: ${validFonts.join(', ')}`);
+  }
+
+  // Wait for fonts to actually load to prevent layout shift or measurement errors
+  if (document.fonts) {
+    try {
+      await document.fonts.ready;
+    } catch (e) {
+      console.warn("Font loading wait failed", e);
+    }
   }
 };

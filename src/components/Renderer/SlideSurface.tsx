@@ -1,10 +1,15 @@
 
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { useDrop } from 'react-dnd';
-import { Slide, Asset, Branding, BoxTransform, TextAlign, VerticalAlign, ZoneId, TextLayout } from '../../types';
+import { Slide, Asset, Branding, BoxTransform, ZoneId, TextLayout, ImageEffect } from '../../types';
 import { LAYOUT_PRESETS } from '../../constants';
 import { AutoFitReadOnly, AutoFitEditable } from './AutoFitComponents';
-import { Maximize, Minimize, StretchHorizontal, Trash2, Move } from 'lucide-react';
+import { ShapeMaskLayer } from './ShapeMaskLayer';
+import { GradientMesh } from './GradientMesh';
+import { GlassCard } from './GlassCard';
+import { getContrastColor } from '../../utils/colorUtils';
+import { TransformableElement } from './TransformableElement';
+import { Plus } from 'lucide-react';
 
 const BASE_WIDTH = 1920;
 const BASE_HEIGHT = 1080;
@@ -15,13 +20,16 @@ interface SlideSurfaceProps {
   assets: Asset[];
   branding: Branding;
   mode: 'preview' | 'edit-text' | 'edit-assets';
+  id?: string; // NEW: Allow ID injection
   activeField?: string | null;
+  activeZoneId?: string | null;
   onFieldActivate?: (field: string) => void;
   onTextUpdate?: (field: string, value: string) => void;
   onTransformUpdate?: (field: string, t: BoxTransform) => void;
   onFontSizeMeasured?: (field: string, size: number) => void;
   onZoneUpdate?: (zoneId: ZoneId, assetId: string) => void;
   onZoneStyleToggle?: (zoneId: ZoneId, type: 'fit' | 'scale' | 'align') => void;
+  onZoneClick?: (zoneId: ZoneId) => void;
   polish?: { noise: boolean; vignette: boolean; };
 }
 
@@ -30,80 +38,128 @@ const DropZone: React.FC<{
   asset?: Asset; 
   zoneData?: any; 
   isArchitect: boolean;
+  isActive: boolean;
   onDrop: (assetId: string) => void;
-  onStyleToggle: (type: 'fit' | 'scale' | 'align') => void;
-  onClear: () => void;
-}> = ({ zoneId, asset, zoneData, isArchitect, onDrop, onStyleToggle, onClear }) => {
-  const [{ isOver }, drop] = useDrop(() => ({
+  onClick: () => void;
+  branding: Branding;
+}> = ({ zoneId, asset, zoneData, isArchitect, isActive, onDrop, onClick, branding }) => {
+  const [{ isOver, canDrop }, drop] = useDrop(() => ({
     accept: ITEM_TYPE_ASSET,
     drop: (item: { id: string }) => onDrop(item.id),
-    collect: (monitor) => ({ isOver: !!monitor.isOver() }),
+    collect: (monitor) => ({ 
+        isOver: !!monitor.isOver(),
+        canDrop: !!monitor.canDrop()
+    }),
   }), [onDrop]);
 
   const fit = zoneData?.content_fit || 'contain';
   const scale = zoneData?.scale || 1;
   const alignment = zoneData?.alignment || 'center center';
   const allowOverflow = zoneData?.allow_overflow || false;
+  
+  // Image Effects
+  const effect = zoneData?.image_effect as ImageEffect;
+  const filterStyle = [
+     effect?.grayscale ? 'grayscale(100%)' : '',
+     effect?.blur ? `blur(${effect.blur}px)` : '',
+  ].filter(Boolean).join(' ');
+
+  const duotoneStyle = effect?.duotone ? {
+     mixBlendMode: 'multiply' as const,
+     opacity: 0.8
+  } : {};
+
+  // Premium Shadow Logic
+  const shadowMap = {
+     'subtle': '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+     'medium': '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+     'dramatic': '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
+  };
+  const boxShadow = effect?.shadow && effect.shadow !== 'none' ? shadowMap[effect.shadow] : 'none';
+
+  // CSS Animation Logic
+  let animationClass = '';
+  if (effect?.motion === 'pan') animationClass = 'animate-subtle-pan';
+  if (effect?.motion === 'zoom') animationClass = 'animate-subtle-zoom';
 
   return (
     <div 
       ref={isArchitect ? (drop as unknown as React.LegacyRef<HTMLDivElement>) : null}
+      onClick={(e) => {
+         if (!isArchitect) return;
+         e.stopPropagation();
+         onClick();
+      }}
       className={`relative w-full h-full flex items-center justify-center transition-all 
         ${allowOverflow ? 'overflow-visible z-20' : 'overflow-hidden z-10'}
-        ${isArchitect ? 'border border-dashed border-gray-400/10' : ''} 
+        ${isArchitect ? 'cursor-pointer' : ''}
+        ${isArchitect && !asset ? 'border border-dashed border-gray-700/50 hover:bg-white/5' : ''} 
         ${isOver ? 'bg-blue-500/20 border-blue-400/50' : ''}
+        ${isActive ? 'ring-4 ring-blue-500 z-50' : ''}
+        ${canDrop && !asset ? 'animate-pulse bg-blue-500/5' : ''}
       `}
     >
+      {isArchitect && !asset && (
+         <div className={`pointer-events-none flex flex-col items-center justify-center text-gray-500 ${isOver ? 'text-blue-200' : ''}`}>
+            <Plus size={32} strokeWidth={1} />
+            <span className="text-[20px] font-mono font-bold uppercase opacity-50">{zoneId}</span>
+         </div>
+      )}
+
       {asset ? (
-        <>
-          <img 
+        <div 
+           className="relative w-full h-full" 
+           style={{ 
+              boxShadow: fit !== 'cover' ? boxShadow : 'none', // Only apply box shadow if not full bleed cover
+              transform: `scale(${scale})`, 
+              transformOrigin: alignment
+           }}
+        >
+           {/* Add style tag for keyframes if motion is active (simplest way to inject without global CSS) */}
+           {effect?.motion && (
+              <style>
+                 {`
+                    @keyframes subtle-pan { 0% { transform: translateX(0%); } 50% { transform: translateX(-2%); } 100% { transform: translateX(0%); } }
+                    @keyframes subtle-zoom { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+                    .animate-subtle-pan { animation: subtle-pan 20s ease-in-out infinite; }
+                    .animate-subtle-zoom { animation: subtle-zoom 20s ease-in-out infinite; }
+                 `}
+              </style>
+           )}
+
+           <img 
             src={asset.uri} 
-            className="w-full h-full pointer-events-none drop-shadow-md" 
+            className={`w-full h-full pointer-events-none drop-shadow-md ${animationClass}`}
             style={{ 
               objectFit: fit as any, 
-              objectPosition: alignment, 
-              transform: `scale(${scale})`, 
-              transformOrigin: alignment 
+              objectPosition: alignment,
+              filter: filterStyle,
+              ...duotoneStyle
             }} 
             alt={zoneId}
             loading="lazy"
             decoding="async"
           />
-          {isArchitect && (
-            <div className="absolute top-2 right-2 flex bg-gray-900/90 border border-gray-700 rounded p-1 shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto">
-               <button onClick={() => onStyleToggle('fit')} className="p-1 text-gray-400 hover:text-white">
-                  {fit === 'cover' ? <Maximize size={14}/> : fit === 'fill' ? <StretchHorizontal size={14}/> : <Minimize size={14}/>}
-               </button>
-               <button onClick={onClear} className="p-1 text-gray-500 hover:text-red-400"><Trash2 size={14}/></button>
-            </div>
+          {/* Duotone Overlay Layer */}
+          {effect?.duotone && (
+             <div 
+                className={`absolute inset-0 pointer-events-none mix-blend-screen ${animationClass}`}
+                style={{
+                   background: `linear-gradient(to bottom right, ${branding.palette[0] || '#000'}, ${branding.palette[1] || '#fff'})`,
+                }}
+             />
           )}
-        </>
+        </div>
       ) : null}
     </div>
   );
 };
 
-export const SlideSurface: React.FC<SlideSurfaceProps> = (props) => {
-  const { slide, assets, branding, mode, activeField, onFieldActivate, onTextUpdate, onTransformUpdate, onFontSizeMeasured, onZoneUpdate, onZoneStyleToggle, polish } = props;
+export const SlideSurface: React.FC<SlideSurfaceProps> = React.memo((props) => {
+  const { slide, assets, branding, mode, id, activeField, activeZoneId, onFieldActivate, onTextUpdate, onTransformUpdate, onFontSizeMeasured, onZoneUpdate, onZoneClick, polish } = props;
   const containerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
   const variant = slide.variants.find(v => v.variant_id === slide.active_variant_id);
-
-  // Interaction State
-  const [dragInfo, setDragInfo] = useState<{ field: string; type: 'move' | 'resize'; handle?: string; startX: number; startY: number; startT: BoxTransform } | null>(null);
-  const [liveTransform, setLiveTransform] = useState<BoxTransform | null>(null);
-
-  // Refs to avoid stale closures during high-frequency events
-  const onTransformUpdateRef = useRef(onTransformUpdate);
-  const scaleRef = useRef(scale);
-
-  useEffect(() => {
-    onTransformUpdateRef.current = onTransformUpdate;
-  }, [onTransformUpdate]);
-
-  useEffect(() => {
-    scaleRef.current = scale;
-  }, [scale]);
 
   useEffect(() => {
     const updateScale = () => {
@@ -117,8 +173,11 @@ export const SlideSurface: React.FC<SlideSurfaceProps> = (props) => {
 
   const [{ isOverBg }, dropBg] = useDrop(() => ({
     accept: ITEM_TYPE_ASSET,
-    drop: (item: { id: string }) => onZoneUpdate?.('background', item.id),
-    collect: (monitor) => ({ isOverBg: !!monitor.isOver() }),
+    drop: (item: { id: string }, monitor) => {
+        if (monitor.didDrop()) return; // IMPORTANT: Prevent background drop if child zone handled it
+        onZoneUpdate?.('background', item.id);
+    },
+    collect: (monitor) => ({ isOverBg: !!monitor.isOver({ shallow: true }) }), // shallow ensures we only light up if hovering background directly
   }), [onZoneUpdate]);
 
   const layoutFields = useMemo(() => LAYOUT_PRESETS[variant?.text_layout || TextLayout.HeadlineBody] || {}, [variant?.text_layout]);
@@ -129,96 +188,24 @@ export const SlideSurface: React.FC<SlideSurfaceProps> = (props) => {
     return merged;
   }, [layoutFields, variant]);
 
-  // --- Interaction Logic ---
-
-  const handleMouseDown = (e: React.MouseEvent, field: string, type: 'move' | 'resize', handle?: string) => {
-    if (mode !== 'edit-text') return;
-    
-    e.stopPropagation();
-    e.preventDefault(); 
-    onFieldActivate?.(field);
-    
-    const startT = { ...transforms[field] };
-    
-    setDragInfo({
-      field,
-      type,
-      handle,
-      startX: e.clientX,
-      startY: e.clientY,
-      startT
-    });
-    setLiveTransform(startT);
-  };
-
-  useEffect(() => {
-    if (!dragInfo) return;
-
-    const handleMouseMove = (e: MouseEvent) => {
-      e.preventDefault();
-      
-      const currentScale = scaleRef.current;
-      if (!currentScale || currentScale === 0) return;
-
-      // Calculate Delta in Percentage relative to Base Dimensions
-      const dx = (e.clientX - dragInfo.startX) / (BASE_WIDTH * currentScale) * 100;
-      const dy = (e.clientY - dragInfo.startY) / (BASE_HEIGHT * currentScale) * 100;
-
-      const newT = { ...dragInfo.startT };
-
-      if (dragInfo.type === 'move') {
-        newT.x += dx;
-        newT.y += dy;
-      } else if (dragInfo.type === 'resize' && dragInfo.handle) {
-        if (dragInfo.handle.includes('e')) newT.w += dx;
-        if (dragInfo.handle.includes('s')) newT.h += dy;
-        if (dragInfo.handle.includes('w')) {
-          newT.x += dx;
-          newT.w -= dx;
-        }
-        if (dragInfo.handle.includes('n')) {
-          newT.y += dy;
-          newT.h -= dy;
-        }
-      }
-
-      // Constrain Size (Min 5%)
-      newT.w = Math.max(5, newT.w);
-      newT.h = Math.max(5, newT.h);
-      
-      setLiveTransform(newT);
-    };
-
-    const handleMouseUp = () => {
-      setLiveTransform(current => {
-          if (current) {
-              if (onTransformUpdateRef.current) {
-                  onTransformUpdateRef.current(dragInfo.field, current);
-              }
-          }
-          return null; 
-      });
-      
-      setDragInfo(null);
-    };
-
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
-    
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [dragInfo]);
-
   if (!variant) return null;
 
   const bgZone = variant.zones['background'];
   const bgAsset = assets.find(a => a.id === bgZone?.asset_id);
+  const peekAsset = bgZone?.peek_asset_id ? assets.find(a => a.id === bgZone.peek_asset_id) : null;
   const isArchitect = mode === 'edit-assets';
+
+  // Smart Contrast Color
+  const baseTextColor = branding.text_color || '#000000';
+  const bgColorHex = branding.background_color || '#ffffff';
+  
+  const smartTextColor = (bgZone?.asset_id || bgZone?.gradient) 
+      ? getContrastColor(bgColorHex)
+      : baseTextColor;
 
   return (
     <div 
+      id={id}
       ref={containerRef} 
       className={`relative w-full aspect-video ${isArchitect && isOverBg ? 'ring-4 ring-blue-500 ring-inset' : ''}`}
       style={{ backgroundColor: branding.background_color || '#ffffff' }}
@@ -229,21 +216,49 @@ export const SlideSurface: React.FC<SlideSurfaceProps> = (props) => {
         style={{ width: `${BASE_WIDTH}px`, height: `${BASE_HEIGHT}px`, transform: `scale(${scale})` }}
       >
         {/* 1. Background Layer */}
-        <div className="absolute inset-0 z-0 overflow-hidden">
-            {bgAsset && (
+        
+        {/* Layer 1A: Base Peek Background (shows through shape) */}
+        {peekAsset && (
+          <div className="absolute inset-0 z-0">
             <img 
-                src={bgAsset.uri} 
-                className="absolute inset-0 w-full h-full" 
-                style={{ 
-                objectFit: bgZone?.content_fit === 'fill' ? 'fill' : (bgZone?.content_fit === 'contain' ? 'contain' : 'cover'),
-                objectPosition: bgZone?.alignment || 'center center'
-                }} 
-                alt="bg"
-                loading="lazy"
-                decoding="async"
+              src={peekAsset.uri} 
+              className="w-full h-full object-cover"
+              alt="peek background"
             />
-            )}
-        </div>
+          </div>
+        )}
+
+        {/* Layer 1B: Gradient Mesh OR Shape Mask OR Standard Background */}
+        {bgAsset && bgZone?.shape_mask && bgZone.shape_mask.type !== 'none' ? (
+           <ShapeMaskLayer 
+              asset={bgAsset}
+              peekAsset={peekAsset || null}
+              shapeMask={bgZone.shape_mask}
+              width={BASE_WIDTH}
+              height={BASE_HEIGHT}
+           />
+        ) : (
+           <div className="absolute inset-0 z-0 overflow-hidden">
+              {/* Render Gradient if exists */}
+              {bgZone?.gradient && (
+                 <GradientMesh config={bgZone.gradient} width={BASE_WIDTH} height={BASE_HEIGHT} />
+              )}
+
+              {bgAsset && (
+              <img 
+                  src={bgAsset.uri} 
+                  className="absolute inset-0 w-full h-full" 
+                  style={{ 
+                  objectFit: bgZone?.content_fit === 'fill' ? 'fill' : (bgZone?.content_fit === 'contain' ? 'contain' : 'cover'),
+                  objectPosition: bgZone?.alignment || 'center center'
+                  }} 
+                  alt="bg"
+                  loading="lazy"
+                  decoding="async"
+              />
+              )}
+           </div>
+        )}
 
         {/* 2. Asset Grid Layer */}
         <div className={`absolute inset-0 grid grid-cols-3 grid-rows-3 z-10 overflow-hidden ${isArchitect ? 'pointer-events-auto' : 'pointer-events-none'}`}>
@@ -259,9 +274,10 @@ export const SlideSurface: React.FC<SlideSurfaceProps> = (props) => {
                   asset={asset} 
                   zoneData={zoneData} 
                   isArchitect={isArchitect}
+                  isActive={activeZoneId === zId}
                   onDrop={(aId) => onZoneUpdate?.(zId as ZoneId, aId)}
-                  onStyleToggle={(type) => onZoneStyleToggle?.(zId as ZoneId, type)}
-                  onClear={() => onZoneUpdate?.(zId as ZoneId, '')}
+                  onClick={() => onZoneClick?.(zId as ZoneId)}
+                  branding={branding}
                 />
               </div>
             );
@@ -270,50 +286,73 @@ export const SlideSurface: React.FC<SlideSurfaceProps> = (props) => {
 
         {/* 3. Text Overlay Layer */}
         <div className={`absolute inset-0 z-20 ${mode === 'edit-text' ? 'pointer-events-auto' : 'pointer-events-none'}`}>
-          {Object.entries(transforms).map(([field, transform]) => {
+          {Object.entries(transforms).map(([field, rawTransform]) => {
+            const transform = rawTransform as BoxTransform;
             const isEditing = mode === 'edit-text' && activeField === field;
-            const isDragging = dragInfo?.field === field;
-            
-            // Prioritize live transform during drag for smooth visuals
-            const t = (isDragging && liveTransform) ? liveTransform : (transform as BoxTransform);
             
             const bold = variant.text_bold?.[field] ?? false;
             const italic = variant.text_italic?.[field] ?? false;
+            const useGlass = variant.text_glass ?? false;
+            const storedFontSize = variant.text_font_size?.[field];
+            
+            const displayColor = useGlass ? branding.text_color : smartTextColor;
 
+            const textComponent = isEditing ? (
+                <AutoFitEditable 
+                  text={variant.text_content[field] || ''} 
+                  onChange={(val) => onTextUpdate?.(field, val)} 
+                  fontFamily={variant.text_font_family?.[field] || branding.fonts[0] || 'Inter'} 
+                  color={displayColor} 
+                  textAlign={variant.text_alignment?.[field] || 'left'} 
+                  verticalAlign={variant.text_vertical_alignment?.[field] || 'middle'} 
+                  maxSize={field === 'headline' || field === 'quote' ? 120 : 60} 
+                  bold={bold} 
+                  italic={italic} 
+                  onMeasured={(size) => onFontSizeMeasured?.(field, size)}
+                  initialFontSize={storedFontSize}
+                />
+            ) : (
+                <AutoFitReadOnly 
+                  text={variant.text_content[field] || ''} 
+                  fontFamily={variant.text_font_family?.[field] || branding.fonts[0] || 'Inter'} 
+                  color={displayColor} 
+                  textAlign={variant.text_alignment?.[field] || 'left'} 
+                  verticalAlign={variant.text_vertical_alignment?.[field] || 'middle'} 
+                  maxSize={field === 'headline' || field === 'quote' ? 120 : 60} 
+                  bold={bold} 
+                  italic={italic} 
+                  onMeasured={(size) => onFontSizeMeasured?.(field, size)} 
+                  initialFontSize={storedFontSize}
+                />
+            );
+
+            // If edit mode is active, wrap in TransformableElement
+            if (mode === 'edit-text') {
+                return (
+                    <TransformableElement
+                        key={field}
+                        field={field}
+                        transform={transform}
+                        baseWidth={BASE_WIDTH}
+                        baseHeight={BASE_HEIGHT}
+                        scale={scale}
+                        isActive={isEditing}
+                        onActivate={() => onFieldActivate?.(field)}
+                        onUpdate={(f, t) => onTransformUpdate?.(f, t)}
+                    >
+                        {useGlass ? <GlassCard className="w-full h-full">{textComponent}</GlassCard> : textComponent}
+                    </TransformableElement>
+                );
+            }
+
+            // Static view (Preview/Architect/Art)
             return (
               <div 
                 key={field} 
-                className={`absolute transition-all ${mode === 'edit-text' ? 'group/field hover:ring-1 hover:ring-blue-400/50' : ''} ${isEditing ? 'ring-2 ring-blue-500 bg-blue-500/5' : ''} ${isDragging ? 'z-[100] cursor-grabbing shadow-2xl' : 'z-50'}`}
-                style={{ left: `${t.x}%`, top: `${t.y}%`, width: `${t.w}%`, height: `${t.h}%`, boxSizing: 'border-box' }}
-                onClick={(e) => { e.stopPropagation(); if (mode === 'edit-text') onFieldActivate?.(field); }}
+                className="absolute z-50"
+                style={{ left: `${transform.x}%`, top: `${transform.y}%`, width: `${transform.w}%`, height: `${transform.h}%`, boxSizing: 'border-box' }}
               >
-                {/* Drag Handle (Top Bar) */}
-                {isEditing && (
-                  <div 
-                    onMouseDown={(e) => handleMouseDown(e, field, 'move')}
-                    className="absolute -top-6 left-0 right-0 h-6 bg-blue-600 rounded-t-md flex items-center justify-center gap-2 cursor-move shadow-sm z-[60] group/handle select-none"
-                    title="Drag to move"
-                  >
-                    <Move size={12} className="text-white" />
-                    <span className="text-[9px] font-bold text-white uppercase tracking-wider">{field.replace('_', ' ')}</span>
-                  </div>
-                )}
-
-                {/* Resize Handles */}
-                {isEditing && (
-                  <>
-                    <div onMouseDown={(e) => handleMouseDown(e, field, 'resize', 'nw')} className="absolute -top-1.5 -left-1.5 w-4 h-4 bg-white border-2 border-blue-500 rounded-full cursor-nw-resize z-[60] shadow-sm hover:scale-110 transition-transform" />
-                    <div onMouseDown={(e) => handleMouseDown(e, field, 'resize', 'ne')} className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-white border-2 border-blue-500 rounded-full cursor-ne-resize z-[60] shadow-sm hover:scale-110 transition-transform" />
-                    <div onMouseDown={(e) => handleMouseDown(e, field, 'resize', 'sw')} className="absolute -bottom-1.5 -left-1.5 w-4 h-4 bg-white border-2 border-blue-500 rounded-full cursor-sw-resize z-[60] shadow-sm hover:scale-110 transition-transform" />
-                    <div onMouseDown={(e) => handleMouseDown(e, field, 'resize', 'se')} className="absolute -bottom-1.5 -right-1.5 w-4 h-4 bg-white border-2 border-blue-500 rounded-full cursor-se-resize z-[60] shadow-sm hover:scale-110 transition-transform" />
-                  </>
-                )}
-
-                {isEditing ? (
-                  <AutoFitEditable text={variant.text_content[field] || ''} onChange={(val) => onTextUpdate?.(field, val)} fontFamily={variant.text_font_family?.[field] || branding.fonts[0] || 'Inter'} color={branding.text_color || '#000000'} textAlign={variant.text_alignment?.[field] || 'left'} verticalAlign={variant.text_vertical_alignment?.[field] || 'middle'} maxSize={field === 'headline' || field === 'quote' ? 120 : 60} bold={bold} italic={italic} onMeasured={(size) => onFontSizeMeasured?.(field, size)} />
-                ) : (
-                  <AutoFitReadOnly text={variant.text_content[field] || ''} fontFamily={variant.text_font_family?.[field] || branding.fonts[0] || 'Inter'} color={branding.text_color || '#000000'} textAlign={variant.text_alignment?.[field] || 'left'} verticalAlign={variant.text_vertical_alignment?.[field] || 'middle'} maxSize={field === 'headline' || field === 'quote' ? 120 : 60} bold={bold} italic={italic} onMeasured={(size) => onFontSizeMeasured?.(field, size)} />
-                )}
+                {useGlass ? <GlassCard className="w-full h-full">{textComponent}</GlassCard> : textComponent}
               </div>
             );
           })}
@@ -325,4 +364,15 @@ export const SlideSurface: React.FC<SlideSurfaceProps> = (props) => {
       </div>
     </div>
   );
-};
+}, (prevProps, nextProps) => {
+  return (
+    prevProps.slide.slide_id === nextProps.slide.slide_id &&
+    prevProps.activeField === nextProps.activeField &&
+    prevProps.activeZoneId === nextProps.activeZoneId && // Added Check
+    prevProps.mode === nextProps.mode &&
+    prevProps.id === nextProps.id && // Added ID Check
+    JSON.stringify(prevProps.slide.variants) === JSON.stringify(nextProps.slide.variants) &&
+    JSON.stringify(prevProps.branding) === JSON.stringify(nextProps.branding) &&
+    JSON.stringify(prevProps.polish) === JSON.stringify(nextProps.polish)
+  );
+});

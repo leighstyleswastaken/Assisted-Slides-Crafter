@@ -23,27 +23,48 @@ export const generatePDF = async (runDoc: RunDoc, customFilename?: string) => {
     hotfixes: ["px_scaling"]
   });
 
-  // Since we are capturing browser rendering, we use a rasterization approach
-  // via html2canvas (must be included in the environment or we can use a simpler 
-  // implementation of the same concept). 
-  
+  // Adaptive scaling to prevent memory crash on large decks
+  // 2x is Retinal quality, but 1.5x is usually sufficient for 1080p PDFs
+  const count = slides.length;
+  let renderScale = 2;
+  if (count > 10) renderScale = 1.5;
+  if (count > 25) renderScale = 1.25;
+  if (count > 40) renderScale = 1.0;
+
+  console.log(`Exporting ${count} slides at ${renderScale}x scale...`);
+
+  const html2canvas = (window as any).html2canvas;
+
   for (let i = 0; i < slides.length; i++) {
     const slideEl = slides[i] as HTMLElement;
     if (i > 0) doc.addPage([1920, 1080], 'landscape');
 
-    // We use html2canvas if available, otherwise we'd need to fallback to manual drawing.
-    // The import map includes html2pdf.js which utilizes html2canvas.
-    const html2canvas = (window as any).html2canvas;
-    
     if (html2canvas) {
-       const canvas = await html2canvas(slideEl, {
-          scale: 2, // 2x for retina quality
-          useCORS: true,
-          allowTaint: true,
-          backgroundColor: '#ffffff'
-       });
-       const imgData = canvas.toDataURL('image/jpeg', 0.95);
-       doc.addImage(imgData, 'JPEG', 0, 0, 1920, 1080);
+       try {
+           const canvas = await html2canvas(slideEl, {
+              scale: renderScale,
+              useCORS: true,
+              allowTaint: true,
+              backgroundColor: '#ffffff',
+              logging: false
+           });
+           
+           const imgData = canvas.toDataURL('image/jpeg', 0.85); // Moderate compression
+           doc.addImage(imgData, 'JPEG', 0, 0, 1920, 1080);
+           
+           // Hint for Garbage Collection
+           canvas.width = 0;
+           canvas.height = 0;
+           canvas.remove();
+       } catch (err) {
+           console.error(`Failed to rasterize slide ${i+1}`, err);
+           // Fallback visual
+           doc.setFillColor('#FFDDDD');
+           doc.rect(0, 0, 1920, 1080, 'F');
+           doc.setFontSize(24);
+           doc.setTextColor('#FF0000');
+           doc.text(`Error rendering slide ${i+1}`, 100, 100);
+       }
     } else {
        // Manual Fallback if capture fails (Similar to v2 but simplified)
        doc.setFillColor('#FFFFFF');

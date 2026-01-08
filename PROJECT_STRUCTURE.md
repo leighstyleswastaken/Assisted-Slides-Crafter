@@ -11,8 +11,12 @@
 ## Source (`src/`)
 
 ### Context (`src/context/`)
-- `RunDocContext.tsx`: The global state provider. Handles initialization, persistence (autosave), exposes `dispatch`, and manages transient `YOLO` state (active/paused).
-- `runDocReducer.ts`: Pure function containing all state mutation logic (Redux pattern). Handles actions like `UPDATE_BRANDING`, `ADD_ASSETS`, `APPROVE_STAGE`, `APPLY_ZONE_TO_INNER`.
+- `RunDocContext.tsx`: The global state provider. Handles initialization, persistence (autosave), and YOLO state.
+- `runDocReducer.ts`: **Main Orchestrator**. Combines slice reducers and manages History (Undo/Redo).
+- `reducers/`: **State Slices**
+  - `globalReducer.ts`: Stage transitions, branding, and project settings.
+  - `assetReducer.ts`: Library management (add, delete, toggle keep).
+  - `slideReducer.ts`: Complex updates for zones, text, and layout.
 
 ### Types (`src/types.ts`)
 - Defines the TypeScript interfaces for the entire domain (`RunDoc`, `Slide`, `Asset`, `Branding`).
@@ -25,9 +29,20 @@
 - `templates.ts`: Definitions for pre-built decks (Startup, Narrative, etc.) and the Tutorial flow.
 
 ### Services (`src/services/`)
-- `geminiService.ts`: Interface to Google's GenAI SDK. Handles specific model calls for text, JSON, and images.
+- `geminiService.ts`: **Facade**. Re-exports specialized AI functions to the rest of the app.
+- `ai/`: **AI Agents**
+  - `core.ts`: Base client wrapper, error handling, retry logic, and event bus.
+  - `strategist.ts`: Branding analysis and Outline generation.
+  - `art.ts`: Image prompting and generation.
+  - `architect.ts`: Layout strategy and zoning logic.
+  - `copywriter.ts`: Text generation.
+  - `mocks.ts`: Offline/Demo mode logic.
+- `pptxService.ts`: **Orchestrator**. Manages the PowerPoint generation process.
+- `pptx/`: **PPTX Engine**
+  - `layers.ts`: Logic for Backgrounds, Asset Grids, and Text layers.
+  - `utils.ts`: Shape rasterization and helpers.
 - `prompts.ts`: Storage for prompt engineering logic. Keeps prompts separate from code.
-- `pipelineService.ts`: Orchestrator for the "YOLO Mode". Handles async chaining, stage navigation, and interrupt (pause/resume) logic.
+- `pipelineService.ts`: Orchestrator for the "YOLO Mode". Handles async chaining and interrupts.
 - `imageProcessingService.ts`: Wrapper for HTML5 Canvas pixel manipulation (Magic Wand background removal).
 - `persistenceService.ts`: Wrapper for IndexedDB (`idb-keyval`) for saving/loading projects.
 - `validationService.ts`: Runtime integrity checks for the JSON data model.
@@ -37,26 +52,40 @@
 ### Components (`src/components/`)
 
 #### Layout
-- `AppShell.tsx`: Main layout container. Renders the Sidebar, the active Stage view, and the global **YOLO Modal Overlay**.
+- `AppShell.tsx`: Main layout container. Renders the Sidebar and active Stage.
+- `StageScaffold.tsx`: Responsive layout wrapper for individual stages.
 
 #### Stages
 - `Stage1Strategist.tsx`: Input, Branding, and Outline generation.
-- `Stage2ArtDept.tsx`: Asset generation and background removal management.
+- `Stage2ArtDept.tsx`: Asset generation management.
   - `ArtDept/ConceptBrief.tsx`: AI suggestions list.
-  - `ArtDept/AssetGallery.tsx`: Grid view of generated images with controls and safety modals.
-- `Stage3Architect.tsx`: Drag-and-drop layout editor using `react-dnd`.
-- `Stage4Copywriter.tsx`: Text editor with layout overlay and soft-limit warnings.
-- `Stage5Publisher.tsx`: Final read-only rendering and PDF export. Supports virtualized list for thumbnails.
+  - `ArtDept/AssetGallery.tsx`: Grid view with controls and safety modals.
+- `Stage3Architect.tsx`: Layout composition.
+  - `Architect/DraggableAsset.tsx`: Drag source.
+  - `Architect/CanvasZone.tsx`: Drop target (3x3 grid).
+  - `Architect/StyleControlPanel.tsx`: Controls for shapes, gradients, and effects.
+- `Stage4Copywriter.tsx`: Text editor with layout overlay.
+- `Stage5Publisher.tsx`: Final review and export.
+  - `Publisher/ReviewModal.tsx`: Creative Director interface.
+  - `Publisher/PublisherSidebar.tsx`: Final polish settings.
 
 #### Renderer
-- `SlideRenderer.tsx`: The "Engine" that takes a `Slide` object + `AssetLibrary` and renders the final visual output. Used in Stage 5 and PDF generation.
+- `SlideSurface.tsx`: **The Engine**. Renders the final visual output (DOM). Used in all stages.
+- `TransformableElement.tsx`: Wrapper for interactive move/resize handles (Stage 4).
+- `AutoFitComponents.tsx`: Text scaling logic.
+- `ShapeMaskLayer.tsx`: SVG background clipping.
+- `GradientMesh.tsx`: Complex CSS/SVG gradients.
+- `GlassCard.tsx`: UI container style.
 
 #### UI
-- `SettingsModal.tsx`: Global settings (AI Models, Import/Export, Templates).
-- `StatusBadge.tsx`: Visual indicator for stage status (Locked, Open, Approved).
-- `LockGuard.tsx`: A wrapper component that enforces read-only state on approved stages and handles the "Unlock" workflow.
+- `YoloOverlay.tsx`: Full-screen automation feedback.
+- `TutorialCoach.tsx`: Floating onboarding guide.
+- `SettingsModal.tsx`: Global settings (AI Models, Import/Export).
+- `StatusBadge.tsx`: Visual indicator for stage status.
+- `LockGuard.tsx`: Enforces read-only state on approved stages.
 - `LoadingScreen.tsx`: Initial app load state.
-- `WelcomeModal.tsx`: Onboarding tutorial and JSON Import.
+- `WelcomeModal.tsx`: Onboarding and JSON Import.
 
 #### DevTools
-- `ProgressTracker.tsx`: Internal tool for tracking feature implementation status.
+- `ProgressTracker.tsx`: Feature implementation status.
+- `UsageLogger.tsx`: Token and API latency monitor.

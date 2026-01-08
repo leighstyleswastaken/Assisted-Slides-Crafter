@@ -23,6 +23,17 @@ export enum AssetKind {
   Background = 'background',
   Texture = 'texture',
   Stamp = 'stamp',
+  Chart = 'chart',
+  Peek = 'peek', // Image that shows through shape cutouts
+}
+
+export enum ShapeType {
+  Wave = 'wave',
+  Blob = 'blob',
+  Diagonal = 'diagonal',
+  Circle = 'circle',
+  Arc = 'arc',
+  None = 'none'
 }
 
 export enum TextLayout {
@@ -43,12 +54,52 @@ export interface BoxTransform {
 export type TextAlign = 'left' | 'center' | 'right';
 export type VerticalAlign = 'top' | 'middle' | 'bottom';
 
+export enum GradientType {
+  Linear = 'linear',
+  Radial = 'radial',
+  Mesh = 'mesh', 
+  Solid = 'solid'
+}
+
+export interface GradientConfig {
+  type: GradientType;
+  colors: string[]; 
+  angle?: number;
+  intensity?: number; // 0-100
+}
+
+export interface ImageEffect {
+  grayscale?: boolean;
+  duotone?: boolean; // Uses brand palette[0] and [1] usually
+  blur?: number; // 0-20
+  opacity?: number; // 0-1
+  shadow?: 'none' | 'subtle' | 'medium' | 'dramatic'; // Premium dropshadows
+  motion?: 'none' | 'pan' | 'zoom'; // Cinematic CSS animations
+}
+
 export interface Zone {
   asset_id: string;
   content_fit?: 'cover' | 'contain' | 'fill'; // fill = stretch
   alignment?: string;
   scale?: number;
-  allow_overflow?: boolean; // New: Allow content to bleed outside the grid zone
+  allow_overflow?: boolean; // Allow content to bleed outside the grid zone
+  
+  // Shape mask properties for Background Zone
+  shape_mask?: {
+    type: ShapeType;
+    color?: string; // Solid color overlay
+    opacity?: number;
+    flip?: boolean; // Flip the shape vertically/horizontally
+    intensity?: number; // How "wavy" or "blobby" (0-100)
+  };
+  
+  // Gradient Background (overrides color)
+  gradient?: GradientConfig;
+
+  // Image processing
+  image_effect?: ImageEffect;
+  
+  peek_asset_id?: string; // Asset that shows through the shape
 }
 
 export type ZoneId = 'background' | 'nw' | 'n' | 'ne' | 'w' | 'c' | 'e' | 'sw' | 's' | 'se';
@@ -66,6 +117,7 @@ export interface SlideVariant {
   text_font_size?: Record<string, number>; // Stored virtual pixels for export parity
   text_bold?: Record<string, boolean>;
   text_italic?: Record<string, boolean>;
+  text_glass?: boolean; // Enable glassmorphism cards for text fields
 }
 
 export interface Slide {
@@ -84,6 +136,18 @@ export interface Branding {
   style_notes?: string;
   keywords?: string[];
   visual_features?: string[];
+  key_facts?: string[]; // Extracted stats
+  data_visualizations?: string[]; // Potential chart descriptions
+}
+
+export interface BrandKit {
+  id: string;
+  name: string;
+  palette: string[];
+  fonts: string[];
+  tone: string;
+  background_color: string;
+  text_color: string;
 }
 
 export interface OutlineItem {
@@ -92,6 +156,13 @@ export interface OutlineItem {
   intent: string;
   suggest_text_layout: TextLayout;
   tags?: string[];
+}
+
+export interface ChartData {
+  type: 'bar' | 'pie';
+  values: number[];
+  labels?: string[]; // Optional for ghost generation
+  title?: string;
 }
 
 export interface Asset {
@@ -106,6 +177,7 @@ export interface Asset {
   prompt: string;
   linked_slide_id?: string;
   tags?: string[];
+  chart_data?: ChartData; // If asset is a chart, store the source data here
 }
 
 export interface AiSettings {
@@ -159,6 +231,7 @@ export interface ImageConcept {
   kind: AssetKind;
   visual_prompt: string;
   rationale: string;
+  chart_data?: ChartData; // Transient data for generation
 }
 
 export type Action =
@@ -178,6 +251,9 @@ export type Action =
   | { type: 'PRUNE_UNKEPT_ASSETS' }
   | { type: 'UPDATE_ZONE'; payload: { slideId: string; variantId: string; zoneId: ZoneId; assetId: string } }
   | { type: 'UPDATE_ZONE_STYLE'; payload: { slideId: string; variantId: string; zoneId: ZoneId; alignment?: string; scale?: number; fit?: 'cover' | 'contain' | 'fill'; allow_overflow?: boolean } }
+  | { type: 'UPDATE_ZONE_EFFECT'; payload: { slideId: string; variantId: string; zoneId: ZoneId; effect: Partial<ImageEffect> } }
+  | { type: 'UPDATE_SHAPE_MASK'; payload: { slideId: string; variantId: string; mask: Partial<Zone['shape_mask']>; peekAssetId?: string } }
+  | { type: 'UPDATE_BACKGROUND_GRADIENT'; payload: { slideId: string; variantId: string; gradient: GradientConfig } }
   | { type: 'REPLACE_ZONES'; payload: { slideId: string; variantId: string; zones: Record<string, Zone> } }
   | { type: 'APPLY_ZONE_TO_INNER'; payload: { zoneId: ZoneId; assetId: string; alignment?: string } }
   | { type: 'APPLY_LAYOUT_STRATEGY'; payload: Array<{ slideId: string; variantId: string; zones: Record<string, any> }> }
@@ -190,6 +266,7 @@ export type Action =
   | { type: 'UPDATE_TEXT_FONT_SIZE'; payload: { slideId: string; variantId: string; field: string; size: number } }
   | { type: 'TOGGLE_TEXT_BOLD'; payload: { slideId: string; variantId: string; field: string } }
   | { type: 'TOGGLE_TEXT_ITALIC'; payload: { slideId: string; variantId: string; field: string } }
+  | { type: 'TOGGLE_TEXT_GLASS'; payload: { slideId: string; variantId: string; enabled: boolean } }
   | { type: 'UPDATE_PROJECT_ID'; payload: string }
   | { type: 'UPDATE_AI_SETTINGS'; payload: Partial<AiSettings> }
   | { type: 'RESET_PROJECT' }

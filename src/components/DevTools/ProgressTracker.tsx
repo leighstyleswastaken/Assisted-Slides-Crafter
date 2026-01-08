@@ -24,6 +24,8 @@ const DEFAULT_FEATURES: FeatureItem[] = [
   { id: 'f13', label: 'Offline PWA Support', done: true },
   { id: 'f14', label: 'Font Pack Generator', done: true },
   { id: 'f15', label: 'JSON Project Restore', done: true },
+  { id: 'f16', label: 'Graceful YOLO Cancel', done: true },
+  { id: 'f17', label: 'Optimized Storage Calc', done: true },
 ];
 
 const ProgressTracker: React.FC<{ onClose: () => void }> = ({ onClose }) => {

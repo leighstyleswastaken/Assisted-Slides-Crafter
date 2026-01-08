@@ -68,6 +68,8 @@ export const Prompts = {
     - Keywords: 5-8 single words that capture the core topics (e.g. "Sustainability", "AI", "Growth").
     - Visual Features: 3-5 physical/visual elements described or implied in the text (e.g. "Green leaves", "Glowing circuits", "Handshake").
     - Style Notes: specific visual directions for image generation (e.g. "Use neon gradients, low poly 3d, dark backgrounds").
+    - Key Facts: Extract 3-5 key statistics, numbers, or hard facts from the text (e.g. "Revenue up 20%", "5000 Users"). If none, leave empty.
+    - Data Visualizations: Suggest 1-3 charts that could represent the data (e.g. "Bar chart of Year over Year growth").
   `,
 
   BrandingSafetyCheck: (branding: Branding) => `
@@ -89,54 +91,81 @@ export const Prompts = {
     }
   `,
 
-  Outline: (sourceText: string, branding: Branding, presentationType: string = 'generic') => `
+  Outline: (sourceText: string, branding: Branding, presentationType: string = 'generic', length: 'short' | 'medium' | 'long' = 'medium') => {
+    const lengthMap = {
+        'short': '3-6 slides',
+        'medium': '8-12 slides',
+        'long': '15-20 slides'
+    };
+
+    return `
     Create a linear slide outline for a presentation based on the source text and branding.
     
     Branding Context:
     Tone: ${safe(branding.tone)}
     Style: ${safe(branding.style_notes)}
+    Key Facts: ${JSON.stringify(branding.key_facts)}
+    Data Vix Suggestions: ${JSON.stringify(branding.data_visualizations)}
 
     Target Presentation Type: ${presentationType.toUpperCase()}
+    Target Length: ${length.toUpperCase()} (${lengthMap[length]})
+    
+    Core Structure Guide:
     ${PRESENTATION_STRUCTURES[presentationType] || PRESENTATION_STRUCTURES['generic']}
 
     Source Text:
     "${sourceText.slice(0, 15000)}"
 
     Instructions:
-    - Break the content into logical slides adhering to the STRUCTURE defined above.
-    - Assign a clear "Intent" for each slide (e.g., "Introduction", "Problem Statement", "Data Reveal").
+    - Break the content into logical slides adhering to the STRUCTURE and LENGTH constraints.
+    - Assign a clear "Intent" for each slide. 
+      * IMPORTANT: The intent should describe the *communicative goal* or a *visual metaphor*. 
+      * Bad: "Market Stats"
+      * Good: "Show market growth using a climbing mountain metaphor."
     - Suggest a text layout (headline_body, two_column, bullets_only, quote, image_caption).
-    - Generate 5-10 slides.
-  `,
+    
+    CRITICAL: DATA HANDLING
+    - Check the 'Key Facts' and 'Data Viz Suggestions'.
+    - If meaningful data exists (numbers/stats), you MUST create specific slides to reveal them.
+    - For these slides, set the 'Intent' to explicitly mention "Chart: [Description]" or "Data Reveal: [Statistic]".
+    - This guides the Art Department to generate charts.
+    
+    Generate ${lengthMap[length]}.
+  `},
 
   // --- Stage 2 ---
 
   ImageConcepts: (outline: OutlineItem[], branding: Branding) => `
     You are an Art Director. Generate a cohesive "Asset Kit" for this presentation.
     
-    Branding Context:
-    - Style: ${safe(branding.style_notes)}
-    - Tone: ${safe(branding.tone)}
-    - Primary Text Color: ${safe(branding.text_color)}
-    - Visual Features: ${branding.visual_features?.join(', ') || 'N/A'}
+    // --- INPUT DATA ---
+    Branding Style: ${safe(branding.style_notes)}
+    Visual Tokens (Features): ${JSON.stringify(branding.visual_features)}
+    Keywords: ${JSON.stringify(branding.keywords)}
+    Data Context: ${branding.key_facts?.join(', ') || 'None'}
     
     Slide Outline:
-    ${JSON.stringify(outline.map((o, i) => ({ index: i, id: o.slide_id, title: safe(o.title) })))}
+    ${JSON.stringify(outline.map((o, i) => ({ index: i, id: o.slide_id, title: safe(o.title), intent: safe(o.intent) })))}
     
-    STRATEGY: "The Kit Approach".
-    Do NOT generate a unique background for every slide. We want consistency.
+    // --- STRATEGY: THE "CLUSTER & COMBINE" METHOD ---
+    1. ANALYZE CLUSTERS: Look at the outline. Group slides into related "chapters" (e.g., The Problem Phase, The Solution Phase, The Data Phase).
+    2. COMBINE TOKENS: For each key slide or cluster, pick one 'Visual Token' from the branding and combine it with the 'Slide Intent'.
+       * Example: Intent="Security Risk" + Token="Shield" => Prompt="A cracked glass shield protecting a glowing data core."
+    3. DATA FIRST: If a slide intent mentions "Chart" or "Data", you MUST generate a 'chart' asset for it.
     
-    Generate exactly the following assets in this order:
-    1. One 'background' for the Intro Slide (Use the ID of the first slide). High impact.
-    2. One 'background' for the Outro Slide (Use the ID of the last slide). High impact.
-    3. One 'background' for Content Slides (Use ID: "kit_content"). Minimal, low contrast, texture-based, suitable for text overlay.
-    4. 2-3 'stamp' assets for reusable decoration (Use ID: "kit_deco"). E.g. Corner shapes, abstract logo elements, or brand motifs.
-    5. 3-4 'stamp' assets for SPECIFIC content slides where a visual is critical (Use the specific slide_id).
+    // --- OUTPUT REQUIREMENTS ---
+    Generate a JSON array of asset concepts. You must include exactly:
+    
+    1. [MANDATORY] One 'background' for the Intro Slide (High impact, sets the scene).
+    2. [MANDATORY] One 'background' for the Outro Slide (Memorable closure).
+    3. [MANDATORY] One 'background' for Content Slides (ID: "kit_content"). Minimal, texture-based, low contrast for text readability.
+    4. [MANDATORY] 2-3 'stamp' assets for general decoration (ID: "kit_deco"). Abstract shapes or logos fitting the brand.
+    5. [CONDITIONAL] 'chart' assets for any slide mentioning stats/numbers in the intent.
+       * Prompt must be: "Flat vector style chart, [DESCRIPTION], on solid white background, clean lines, brand colors".
+    6. [CONTEXTUAL] 3-4 'stamp' assets for specific "Clusters" identified in step 1.
+       * Prompt must be: "[OBJECT] related to [INTENT], isolated on solid white background, flat lighting, hard edges".
 
-    CRITICAL INSTRUCTIONS:
-    1. CONTRAST: The 'background' assets must provide extreme contrast with the Primary Text Color (${safe(branding.text_color)}). If text is white, backgrounds must be dark. If text is black, backgrounds must be light.
-    2. STAMPS: Strictly append: "isolated on a solid white background, no shadows, no gradients, high contrast edge" to the visual_prompt for all stamps to facilitate automatic background removal. Avoid colors that wash out against the background.
-    3. BACKGROUNDS (NO FRAMES): The center of the image MUST be empty negative space. **ABSOLUTELY NO borders, frames, vignettes, UI containers, or box outlines.** The image should be full-bleed texture or scene. If the model generates any logos or details, they MUST be positioned in the bottom-left corner.
+    Visual Style Rule: All assets must respect: "${safe(branding.style_notes)}".
     
     Return a JSON array of concepts.
   `,
@@ -162,19 +191,11 @@ export const Prompts = {
     {
       "zones": { "zone_id": "asset_id", ... }
     }
-    Select the best background from available assets. Place stamps in appropriate grid zones to balance the composition. Leave space for text.
+    Select the best background. Place stamps or CHARTS in appropriate grid zones (e.g. 'e' or 'w' for side-by-side text).
   `,
 
   SuggestLayoutStrategy: (outline: OutlineItem[], assets: Asset[]) => `
-    You are a Layout Architect. Assign layouts and assets to the entire slide deck to ensure visual consistency without overuse.
-    
-    Goal: Create a cohesive visual flow. 
-    - Use the Intro Background for the first slide.
-    - Use the Outro Background for the last slide.
-    - Use the Content Background (kit_content) for most text-heavy slides.
-    - Distribute 'stamp' assets (kit_deco) sparingly. Do NOT put a stamp on every slide.
-    - **CRITICAL**: The first slide (index 0) is the Title Slide. It MUST NOT contain any 'stamp' or 'motif' assets in the grid zones. Only the Background is allowed.
-    - If a specific asset exists for a slide (linked via slide_id), USE IT.
+    You are a Layout Architect. Assign layouts and assets to the entire slide deck.
     
     Slides:
     ${JSON.stringify(outline.map((o, i) => ({ index: i, id: o.slide_id, title: safe(o.title), intent: safe(o.intent) })))}
@@ -190,7 +211,8 @@ export const Prompts = {
     Grid Zones: nw, n, ne, w, c, e, sw, s, se.
     Background Zone: 'background'.
     
-    Task: Return a JSON object with a single "assignments" array. Each item maps a slide_id to its zone configuration.
+    Task: Return a JSON object with a single "assignments" array.
+    If a slide has a specific CHART asset (kind='chart' and linked_slide_id matches), PLACE IT in a prominent zone (e.g. 'c', 'e', or 'w').
     
     Return Format:
     {
@@ -205,26 +227,31 @@ export const Prompts = {
 
   // --- Stage 4 ---
 
-  Copywriter: (title: string, intent: string, tone: string, layout: string, sourceMaterial: string, keys: string[]) => `
+  Copywriter: (title: string, intent: string, tone: string, layout: string, sourceMaterial: string, keys: string[], keyFacts: string[]) => `
     You are a professional Copywriter. Write content for a presentation slide.
+    
+    CRITICAL: You must strictly adhere to the Slide Intent provided in the Outline. Do not hallucinate generic content.
     
     Context:
     - Slide Title: "${safe(title)}"
-    - Slide Intent: "${safe(intent)}"
+    - Slide Intent (PRIMARY INSTRUCTION): "${safe(intent)}"
     - Tone: "${safe(tone)}"
     - Layout: "${safe(layout)}"
     
-    Source Material:
+    Available Data (Key Facts): 
+    ${keyFacts.join(', ')}
+    
+    Source Material Reference:
     "${sourceMaterial.slice(0, 5000)}"
     
     Task:
     Write content for the following fields: ${keys.join(', ')}.
     
     Guidelines:
-    - Headlines should be punchy and short.
-    - Body copy should be concise, suitable for a slide (not a document).
-    - If layout is 'bullets_only' or 'bullets', provide a list of bullets. **IMPORTANT:** Start each bullet point with a bullet character (•) and separate them with a newline character. Example: "• Point 1\n• Point 2".
-    - If layout is 'quote', find a relevant quote in source or synthesize one that fits.
+    - Headlines should be punchy and directly related to the Title.
+    - Body copy should be concise.
+    - If layout is 'bullets_only', start each bullet with • and separate with newline.
+    - If the slide Intent or Key Facts mention data/numbers, YOU MUST INCLUDE THOSE NUMBERS in the copy (body or bullets) to ensure the data is surfaced, even if a chart is present.
     
     Return a JSON object with keys: ${JSON.stringify(keys)}.
   `,
@@ -232,26 +259,20 @@ export const Prompts = {
   // --- Reviewer ---
   Reviewer: (outline: OutlineItem[], slides: Slide[], assets: Asset[], branding: Branding) => {
     
-    // 1. Construct the Media Pack (Asset Inventory)
-    // Providing a catalog for the Reviewer to pick from if they want to add something new.
     const mediaPack = assets.map(a => 
       `- Asset: { "id": "${a.id}", "kind": "${a.kind.toUpperCase()}", "desc": "${safe(a.prompt).slice(0, 60)}..." }`
     ).join('\n');
 
-    // 2. Construct the Branding Context
     const brandContext = `
       Tone: ${safe(branding.tone)}
       Fonts: ${branding.fonts.join(', ')}
       Text Color: ${safe(branding.text_color)}
     `;
 
-    // 3. Construct Rigid Configuration State
-    // We send this exact JSON structure to the model so it knows exactly what to modify.
     const deckConfiguration = outline.map(o => {
         const slide = slides.find(s => s.slide_id === o.slide_id);
         const variant = slide?.variants.find(v => v.variant_id === slide.active_variant_id);
         
-        // VISUAL CONTEXT: Resolve asset IDs to descriptions so the LLM "sees" the content
         const resolvedVisuals: Record<string, string> = {};
         if (variant?.zones) {
            Object.entries(variant.zones).forEach(([zoneKey, zoneData]) => {
@@ -269,18 +290,13 @@ export const Prompts = {
            variant_id: variant?.variant_id || 'v1',
            title: safe(o.title),
            intent: safe(o.intent),
-           // EXPLICIT STATE: Text Fields
            text_fields: variant?.text_content || {},
            active_alignment: variant?.text_alignment || {},
-           // EXPLICIT STATE: Visual Zones
            active_zones: variant?.zones || {},
-           // CONTEXT: What is actually visible?
            visual_summary: resolvedVisuals
         };
     });
 
-    // TYPESCRIPT DEFINITION (The "Magic Sauce" Context)
-    // Providing this to the model drastically reduces hallucination by grounding it in code.
     return `
     You are a JSON-only API acting as a Creative Director.
     
@@ -296,25 +312,25 @@ export const Prompts = {
     // --- TARGET SCHEMA DEFINITIONS ---
     type Zone = 'background' | 'nw' | 'n' | 'ne' | 'w' | 'c' | 'e' | 'sw' | 's' | 'se';
     type TextField = 'headline' | 'body' | 'caption' | 'quote' | 'author' | 'column_left' | 'column_right' | 'bullets';
-    type AssetKind = 'background' | 'stamp' | 'texture';
+    type AssetKind = 'background' | 'stamp' | 'texture' | 'chart';
 
     interface UpdateTextAction {
       type: 'UPDATE_TEXT_CONTENT';
       payload: {
-        slideId: string; // Must match DECK
-        variantId: string; // Must match DECK
+        slideId: string;
+        variantId: string;
         field: TextField;
-        value: string; // The fully rewritten text (MAX 150 chars)
+        value: string;
       }
     }
 
     interface UpdateZoneAction {
       type: 'UPDATE_ZONE';
       payload: {
-        slideId: string; // Must match DECK
-        variantId: string; // Must match DECK
+        slideId: string;
+        variantId: string;
         zoneId: Zone;
-        assetId: string; // Must be a valid ID from ASSET LIBRARY
+        assetId: string;
       }
     }
 
@@ -331,16 +347,16 @@ export const Prompts = {
     interface RequestAssetAction {
       type: 'REQUEST_NEW_ASSET';
       payload: {
-        slideId: string; // The slide where this asset is needed
+        slideId: string;
         variantId: string;
-        zoneId: Zone; // Where to place it after generation
-        visualPrompt: string; // A detailed prompt for the image generator
+        zoneId: Zone;
+        visualPrompt: string;
         kind: AssetKind;
       }
     }
 
     interface Suggestion {
-      description: string; // Short explanation (< 25 words)
+      description: string;
       action: UpdateTextAction | UpdateZoneAction | UpdateAlignmentAction | RequestAssetAction;
     }
 
@@ -351,15 +367,15 @@ export const Prompts = {
     // --- INSTRUCTIONS ---
     1. Analyze the DECK state against the BRANDING.
     2. Identify empty visual zones or weak text copy.
-    3. **ALIGNMENT**: Use 'UPDATE_TEXT_ALIGNMENT' to ensure headlines on the Title Slide (first slide) are CENTERED. For body slides, favor LEFT alignment for readability.
-    4. **MISSING ASSETS**: If a slide needs a visual (e.g., 'visual_summary' is empty) but the ASSET LIBRARY contains nothing relevant, use 'REQUEST_NEW_ASSET' to commission a new image.
+    3. Use 'UPDATE_TEXT_ALIGNMENT' to center headlines on title slides.
+    4. Use 'REQUEST_NEW_ASSET' (kind='chart' or 'stamp') if data visualization is missing for a data-heavy slide.
     5. Return a valid JSON object adhering to the 'Response' interface.
-    6. Max 10 suggestions total.
     
-    // --- RULES ---
-    - Do NOT hallucinate Asset IDs. If you need a new image, use REQUEST_NEW_ASSET.
-    - If you REQUEST_NEW_ASSET, you MUST provide a detailed 'visualPrompt' suitable for image generation (include brand style notes).
-    - If kind is 'stamp', append "isolated on white background" to the visualPrompt.
+    // --- CRITICAL RULES ---
+    - Do NOT hallucinate Asset IDs. If using 'UPDATE_ZONE', you MUST provide a valid 'assetId' from the provided 'mediaPack'. If no suitable asset exists, use 'REQUEST_NEW_ASSET'.
+    - If using 'REQUEST_NEW_ASSET', you MUST provide a detailed 'visualPrompt' (e.g. "A glowing red futuristic shield").
+    - If using 'UPDATE_TEXT_ALIGNMENT', you MUST provide 'alignment' ('left', 'center', 'right') and 'field' ('headline', etc).
+    - If kind is 'stamp' or 'chart', append "isolated on white background".
   `;
   }
 };

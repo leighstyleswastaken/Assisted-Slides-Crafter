@@ -1,6 +1,6 @@
 
 import React, { useState, useRef } from 'react';
-import { Palette, AlertCircle, Loader2, Layers, Trash2, CheckCircle2, Heart, Eraser, RotateCw, RefreshCw, CheckCheck, Archive, Wand2, Sparkles, CopyPlus, Maximize2, Download, RotateCcw, Droplet, X, Upload, Image, Box, FileImage, Bot } from 'lucide-react';
+import { Palette, AlertCircle, Loader2, Layers, Trash2, CheckCircle2, Heart, Eraser, RotateCw, RefreshCw, CheckCheck, Archive, Wand2, Sparkles, CopyPlus, Maximize2, Download, RotateCcw, Droplet, X, Upload, Image, Box, FileImage, Bot, BarChart } from 'lucide-react';
 import { Asset, AssetKind } from '../../../types';
 import JSZip from 'jszip';
 // @ts-ignore
@@ -150,6 +150,17 @@ const ImportClassificationModal: React.FC<ImportClassificationModalProps> = ({ s
                   <div>
                      <span className="font-bold text-white block">Stamp / Element</span>
                      <span className="text-xs text-gray-400">Isolated object. Placed in grid zones.</span>
+                  </div>
+               </button>
+
+               <button 
+                  onClick={() => onSelect(AssetKind.Chart)}
+                  className="w-full text-left p-4 rounded-lg bg-gray-800 hover:bg-gray-750 border border-transparent hover:border-emerald-500/50 transition-all group flex items-center gap-4"
+               >
+                  <div className="bg-emerald-900/30 p-2 rounded text-emerald-400"><BarChart size={24}/></div>
+                  <div>
+                     <span className="font-bold text-white block">Chart / Data</span>
+                     <span className="text-xs text-gray-400">Data visualization. Placed in grid zones.</span>
                   </div>
                </button>
 
@@ -507,7 +518,7 @@ const AssetGallery: React.FC<Props> = ({
                         <div className="flex justify-between items-start pointer-events-auto pl-6"> 
                            {/* Padding added for the badge space */}
                            <div className="flex gap-1">
-                              <span className="text-[10px] font-mono bg-black/50 px-1.5 py-0.5 rounded text-white">{asset.kind}</span>
+                              <span className={`text-[10px] font-mono bg-black/50 px-1.5 py-0.5 rounded text-white ${asset.kind === AssetKind.Chart ? 'bg-emerald-900 text-emerald-300' : ''}`}>{asset.kind}</span>
                               {asset.transparent && <span className="text-[10px] font-mono bg-blue-900/80 text-blue-200 px-1.5 py-0.5 rounded flex items-center gap-1"><Layers size={8}/> PNG</span>}
                            </div>
                            <div className="flex gap-1">

@@ -1,5 +1,5 @@
 
-import { RunDoc, Stage, StageStatus, AspectRatio, AssetKind, TextLayout, BoxTransform } from './types';
+import { RunDoc, Stage, StageStatus, AspectRatio, AssetKind, TextLayout, BoxTransform, BrandKit } from './types';
 
 export const PRESENTATION_TYPES = [
   { id: 'pitch', label: 'Pitch Deck', icon: '🚀', desc: 'Persuasive. Problem, Solution, Market, Ask.' },
@@ -7,6 +7,45 @@ export const PRESENTATION_TYPES = [
   { id: 'status', label: 'Status Report', icon: '📊', desc: 'Update. Progress, Metrics, Blockers, Next Steps.' },
   { id: 'narrative', label: 'Story / Narrative', icon: '📖', desc: 'Emotional. Hook, Journey, Climax, Resolution.' },
   { id: 'generic', label: 'General Presentation', icon: '📑', desc: 'Balanced. Introduction, Body, Conclusion.' },
+];
+
+export const BRAND_KITS: BrandKit[] = [
+  {
+    id: 'startup_tech',
+    name: 'Tech Startup',
+    palette: ['#3b82f6', '#0f172a', '#ffffff', '#cbd5e1'],
+    text_color: '#ffffff',
+    background_color: '#0f172a',
+    fonts: ['Inter', 'Roboto'],
+    tone: 'Modern, Clean, Innovative'
+  },
+  {
+    id: 'nature_eco',
+    name: 'Eco / Nature',
+    palette: ['#064e3b', '#10b981', '#ecfdf5', '#f59e0b'],
+    text_color: '#064e3b',
+    background_color: '#ecfdf5',
+    fonts: ['Merriweather', 'Lato'],
+    tone: 'Organic, Fresh, Trustworthy'
+  },
+  {
+    id: 'luxury_dark',
+    name: 'Luxury Dark',
+    palette: ['#000000', '#fbbf24', '#262626', '#d4d4d4'],
+    text_color: '#ffffff',
+    background_color: '#000000',
+    fonts: ['Playfair Display', 'Lato'],
+    tone: 'Elegant, Premium, Sophisticated'
+  },
+  {
+    id: 'vibrant_pop',
+    name: 'Vibrant Pop',
+    palette: ['#db2777', '#7c3aed', '#fff1f2', '#111827'],
+    text_color: '#111827',
+    background_color: '#fff1f2',
+    fonts: ['Poppins', 'Open Sans'],
+    tone: 'Energetic, Playful, Bold'
+  }
 ];
 
 export const INITIAL_RUN_DOC: RunDoc = {

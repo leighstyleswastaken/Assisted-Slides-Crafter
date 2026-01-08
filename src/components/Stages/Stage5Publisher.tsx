@@ -1,8 +1,9 @@
+
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useRunDoc } from '../../context/RunDocContext';
 import { Stage, Action, StageStatus, Asset, AssetKind, Slide, OutlineItem, Branding } from '../../types';
 import { SlideSurface } from '../Renderer/SlideSurface';
-import { FileDown, Loader2, Presentation, Bot, CheckCircle2, Unlock, Bug, Gauge, Layout } from 'lucide-react';
+import { FileDown, Loader2, Presentation, Bot, CheckCircle2, Unlock, Bug, Gauge, Layout, Camera } from 'lucide-react';
 import { generatePPTX } from '../../services/pptxService';
 import { generatePDF } from '../../services/pdfService';
 import { runReviewLoop, ReviewSuggestion } from '../../services/reviewerService';
@@ -23,7 +24,7 @@ interface SelectableSuggestion {
   selected: boolean;
 }
 
-// --- List Row Component (Moved Outside to prevent Flicker) ---
+// --- List Row Component ---
 
 interface RowData {
   slides: Slide[];
@@ -33,35 +34,48 @@ interface RowData {
   polish: { noise: boolean; vignette: boolean };
   onScrollTo: (index: number) => void;
   currentIndex: number;
+  thumbnails: Record<string, string>; // Image Cache
 }
 
 const ThumbnailRow = React.memo(({ index, style, data }: { index: number; style: React.CSSProperties; data: RowData }) => {
   const slide = data.slides[index];
   const outlineItem = data.outline.find(o => o.slide_id === slide.slide_id);
+  const thumbnail = data.thumbnails[slide.slide_id];
+  const title = outlineItem?.title || slide.slide_id;
   
+  // Fixed Dimension Logic for 120px wide thumbnail
+  // 120px / 1920px = 0.0625 scale
+  const THUMB_WIDTH = 120;
+  const BASE_WIDTH = 1920;
+  const SCALE = THUMB_WIDTH / BASE_WIDTH; // 0.0625
+
   return (
-    <div style={{ ...style, padding: '8px' }}>
+    <div style={{ ...style, padding: '8px 16px 8px 8px' }}>
       <button 
         onClick={() => data.onScrollTo(index)}
+        title={title}
         className="w-full h-full flex gap-3 p-2 bg-gray-900 border border-gray-800 rounded hover:bg-gray-800 hover:border-gray-700 transition-all text-left group relative overflow-hidden"
       >
-        <div className="w-24 aspect-video bg-gray-950 rounded border border-gray-800 overflow-hidden shrink-0 relative">
-           {/* Mini Render */}
-           <div className="origin-top-left transform scale-[0.165]" style={{ width: '1920px', height: '1080px' }}>
-              <SlideSurface 
-                 slide={slide}
-                 assets={data.assets}
-                 branding={data.branding}
-                 mode="preview"
-                 polish={data.polish}
-              />
-           </div>
+        <div className="w-[120px] aspect-video bg-gray-950 rounded border border-gray-800 overflow-hidden shrink-0 relative">
+           {thumbnail ? (
+              <img src={thumbnail} alt="slide" className="w-full h-full object-cover" />
+           ) : (
+              <div className="origin-top-left" style={{ width: '1920px', height: '1080px', transform: `scale(${SCALE})` }}>
+                  <SlideSurface 
+                    slide={slide}
+                    assets={data.assets}
+                    branding={data.branding}
+                    mode="preview"
+                    polish={data.polish}
+                  />
+              </div>
+           )}
            {/* Interaction overlay */}
            <div className="absolute inset-0 bg-transparent group-hover:bg-white/5 transition-colors"></div>
         </div>
         <div className="flex-1 min-w-0 flex flex-col justify-center">
            <span className="text-[10px] text-gray-500 font-mono mb-1">{String(index + 1).padStart(2, '0')}</span>
-           <span className="text-xs font-bold text-gray-300 truncate">{outlineItem?.title || slide.slide_id}</span>
+           <span className="text-xs font-bold text-gray-300 truncate">{title}</span>
         </div>
       </button>
     </div>
@@ -79,6 +93,10 @@ const Stage5Publisher: React.FC = () => {
   // Timer State
   const [elapsedTime, setElapsedTime] = useState(0);
   const timerRef = useRef<number | null>(null);
+  
+  // Snapshot State
+  const [thumbnails, setThumbnails] = useState<Record<string, string>>({});
+  const processedRef = useRef<Set<string>>(new Set());
   
   // Anti-Churn
   const [lastAnalysed, setLastAnalysed] = useState<string | null>(null);
@@ -122,11 +140,73 @@ const Stage5Publisher: React.FC = () => {
     return () => observer.disconnect();
   }, []);
 
+  // --- SNAPSHOT SYSTEM ---
+  // When a slide is viewed in the main deck, capture it as a thumbnail.
+  useEffect(() => {
+     if (!mainScrollRef.current) return;
+
+     const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+           if (entry.isIntersecting) {
+              const slideEl = entry.target as HTMLElement;
+              const slideId = slideEl.dataset.slideId;
+              
+              // CRITICAL: Only process if we haven't already processed this ID in this session.
+              // Prevents infinite loop of [Snapshot -> State Update -> Re-Render -> Snapshot]
+              if (slideId && !processedRef.current.has(slideId) && !thumbnails[slideId]) {
+                 processedRef.current.add(slideId); // Mark as pending
+                 
+                 // Wait for render to settle (images load, text AutoFit calculates, blur animation finishes)
+                 // Increased to 2500ms to ensure 0.25s blur + font calculation + large image decode happens first
+                 setTimeout(() => {
+                    const idleCallback = (window as any).requestIdleCallback || ((cb: Function) => setTimeout(cb, 1));
+                    idleCallback(() => captureSnapshot(slideId));
+                 }, 2500);
+              }
+           }
+        });
+     }, { root: mainScrollRef.current, threshold: 0.5 }); // Trigger when 50% visible
+
+     const slides = mainScrollRef.current.querySelectorAll('.canonical-slide');
+     slides.forEach(el => observer.observe(el));
+
+     return () => observer.disconnect();
+     // Only re-run if the structural list of slides changes. Content updates are handled by manual invalidation below.
+  }, [state.slides.map(s => s.slide_id).join(',')]);
+
+  const captureSnapshot = async (slideId: string) => {
+     // Double check state inside async to be safe
+     if (thumbnails[slideId]) return;
+     
+     const el = document.getElementById(`slide-render-${slideId}`);
+     if (!el) return;
+
+     try {
+        const html2canvas = (window as any).html2canvas;
+        if (html2canvas) {
+           const canvas = await html2canvas(el, {
+              scale: 0.2, // Low res is fine for thumbnail
+              logging: false,
+              useCORS: true,
+              backgroundColor: null, // Transparent
+           });
+           // Use JPEG for smaller memory footprint
+           const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+           setThumbnails(prev => ({ ...prev, [slideId]: dataUrl }));
+        }
+     } catch (e) {
+        console.warn("Snapshot failed for", slideId, e);
+     }
+  };
+
   // Effects...
   useEffect(() => {
     if (applyingFixes.current && !isApplyingFixes) {
        setLastAnalysed(state.last_modified);
        applyingFixes.current = false;
+       // Clear thumbnails on change so they regenerate
+       setThumbnails({});
+       processedRef.current.clear(); // Reset guard to allow regeneration
     }
   }, [state.last_modified, isApplyingFixes]);
 
@@ -286,6 +366,11 @@ const Stage5Publisher: React.FC = () => {
        for (const req of generatorRequests) {
           const { slideId, variantId, zoneId, visualPrompt, kind } = req.payload;
           
+          if (!visualPrompt || typeof visualPrompt !== 'string' || visualPrompt.trim() === '') {
+             console.warn("Skipping asset generation due to empty prompt");
+             continue;
+          }
+
           try {
              const base64 = await generateAssetImage(visualPrompt, kind, imageModel);
              let processedUri = await compressImage(base64, 0.8, 'image/webp');
@@ -393,14 +478,16 @@ const Stage5Publisher: React.FC = () => {
     branding: state.branding,
     polish: polish,
     onScrollTo: scrollToSlide,
-    currentIndex: -1
-  }), [state.slides, state.outline, state.asset_library, state.branding, polish]);
+    currentIndex: -1,
+    thumbnails: thumbnails // Pass thumbnails to row
+  }), [state.slides, state.outline, state.asset_library, state.branding, polish, thumbnails]);
 
   return (
     <StageScaffold
       title="Publisher"
       step="05"
       description="Final review and high-fidelity export."
+      mobileTabs={{ sidebar: 'Export', rightPanel: 'Navigator' }}
       actions={
         <>
           {showFinaliseConfirm && (
@@ -416,7 +503,7 @@ const Stage5Publisher: React.FC = () => {
           {!isApproved ? (
              <div className="flex items-center gap-2">
                {/* Controls Container */}
-               <div className="flex items-center gap-2 mr-2 bg-gray-900/50 p-1 rounded-lg border border-gray-800">
+               <div className="flex items-center gap-2 mr-2 bg-gray-900/50 p-1 rounded-lg border border-gray-800 hidden md:flex">
                   <div className="flex items-center gap-1.5 px-2 border-r border-gray-800" title="Use Gemini 3 Pro for deeper reasoning">
                       <input 
                         type="checkbox" 
@@ -455,7 +542,7 @@ const Stage5Publisher: React.FC = () => {
                <button 
                   onClick={handleRunImprovement} 
                   disabled={isImproving || isApplyingFixes || pendingSuggestions.length > 0 || isUpToDate} 
-                  className={`px-4 py-2.5 rounded font-bold transition-all flex items-center gap-2 shadow-lg border border-transparent min-w-[160px] justify-center ${
+                  className={`px-3 py-2 md:px-4 md:py-2.5 rounded font-bold transition-all flex items-center gap-2 shadow-lg border border-transparent min-w-[40px] md:min-w-[160px] justify-center ${
                      isUpToDate 
                      ? 'bg-gray-800 text-gray-600 opacity-50 cursor-not-allowed' 
                      : 'bg-gray-800 hover:bg-purple-900/30 text-gray-300 hover:border-purple-500/30'
@@ -466,16 +553,23 @@ const Stage5Publisher: React.FC = () => {
                     <span className="flex items-center gap-2">
                        <span className="font-mono text-xs">{formatTime(elapsedTime)}</span>
                     </span>
-                  ) : isUpToDate ? 'Reviewed' : 'Auto-Improve'}
+                  ) : (
+                    <>
+                        <span className="hidden md:inline">{isUpToDate ? 'Reviewed' : 'Auto-Improve'}</span>
+                        <span className="md:hidden">{isUpToDate ? '' : 'Auto'}</span>
+                    </>
+                  )}
                </button>
-               <button onClick={handleFinalizeClick} className="px-6 py-2.5 bg-green-600 hover:bg-green-500 text-white rounded font-bold transition-all flex items-center gap-2 shadow-lg">
-                  <CheckCircle2 size={20} /> Finalise Project
+               
+               {/* Finalise Button - visible on mobile now but compact */}
+               <button onClick={handleFinalizeClick} className="px-3 py-2 md:px-6 md:py-2.5 bg-green-600 hover:bg-green-500 text-white rounded font-bold transition-all flex items-center gap-2 shadow-lg">
+                  <CheckCircle2 size={20} /> <span className="hidden md:inline">Finalise Project</span>
                </button>
              </div>
           ) : (
             <div className="flex items-center gap-2">
-               <div className="px-4 py-2 bg-gray-900 border border-green-900/50 text-green-400 rounded-full text-xs font-mono font-bold flex items-center gap-2">
-                  <CheckCircle2 size={14}/> PROJECT CLOSED
+               <div className="px-3 py-1.5 md:px-4 md:py-2 bg-gray-900 border border-green-900/50 text-green-400 rounded-full text-[10px] md:text-xs font-mono font-bold flex items-center gap-2">
+                  <CheckCircle2 size={14}/> <span className="hidden md:inline">PROJECT CLOSED</span><span className="md:hidden">CLOSED</span>
                </div>
                <button 
                   onClick={() => dispatch({ type: 'UNLOCK_STAGE', payload: Stage.Publisher })}
@@ -487,13 +581,13 @@ const Stage5Publisher: React.FC = () => {
             </div>
           )}
           
-          <div className="w-px h-8 bg-gray-800 mx-2"></div>
+          <div className="w-px h-8 bg-gray-800 mx-2 hidden md:block"></div>
 
-          <button onClick={handleExportPPTX} disabled={isExportingPPTX} className="px-4 py-2.5 bg-gray-800 hover:bg-orange-700 hover:text-white text-gray-300 rounded font-bold transition-all flex items-center gap-2 shadow-lg disabled:opacity-50">
-            {isExportingPPTX ? <Loader2 className="animate-spin" size={20} /> : <Presentation size={20} />} PPTX
+          <button onClick={handleExportPPTX} disabled={isExportingPPTX} className="px-3 py-2 md:px-4 md:py-2.5 bg-gray-800 hover:bg-orange-700 hover:text-white text-gray-300 rounded font-bold transition-all flex items-center gap-2 shadow-lg disabled:opacity-50">
+            {isExportingPPTX ? <Loader2 className="animate-spin" size={20} /> : <Presentation size={20} />} <span className="hidden md:inline">PPTX</span>
           </button>
-          <button onClick={handleExportPDF} disabled={isExportingPDF} className="px-6 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded font-bold transition-all flex items-center gap-2 shadow-lg shadow-red-900/20 disabled:opacity-50">
-            {isExportingPDF ? <Loader2 className="animate-spin" size={20} /> : <FileDown size={20} />} PDF
+          <button onClick={handleExportPDF} disabled={isExportingPDF} className="px-3 py-2 md:px-6 md:py-2.5 bg-red-600 hover:bg-red-500 text-white rounded font-bold transition-all flex items-center gap-2 shadow-lg shadow-red-900/20 disabled:opacity-50">
+            {isExportingPDF ? <Loader2 className="animate-spin" size={20} /> : <FileDown size={20} />} <span className="hidden md:inline">PDF</span>
           </button>
         </>
       }
@@ -517,7 +611,7 @@ const Stage5Publisher: React.FC = () => {
                   <List
                      height={listHeight}
                      itemCount={state.slides.length}
-                     itemSize={100} // Increased size slightly
+                     itemSize={100} 
                      width="100%"
                      itemData={itemData}
                      className="no-scrollbar"
@@ -531,12 +625,13 @@ const Stage5Publisher: React.FC = () => {
     >
       <div 
          ref={mainScrollRef}
-         className="flex-1 overflow-y-auto bg-gray-950 p-8 flex justify-center"
+         className="flex-1 overflow-y-auto bg-gray-950 p-4 md:p-8 flex justify-center"
       >
         <div className="space-y-8 w-full max-w-[1122px] pb-32">
           {state.slides.map((slide, index) => (
-            <div key={slide.slide_id} className="relative group shadow-2xl canonical-slide">
+            <div key={slide.slide_id} id={`slide-render-${slide.slide_id}`} data-slide-id={slide.slide_id} className="relative group shadow-2xl canonical-slide">
               <SlideSurface 
+                id={`slide-surface-${slide.slide_id}`}
                 slide={slide} 
                 assets={state.asset_library} 
                 branding={state.branding} 
@@ -544,7 +639,7 @@ const Stage5Publisher: React.FC = () => {
                 polish={polish}
                 onFontSizeMeasured={(field, size) => handleFontSizeMeasured(slide.slide_id, slide.active_variant_id, field, size)}
               />
-              <div className="absolute top-4 -left-12 text-gray-600 font-mono text-xl font-bold opacity-50 no-print">{String(index + 1).padStart(2, '0')}</div>
+              <div className="absolute top-4 -left-12 text-gray-600 font-mono text-xl font-bold opacity-50 no-print hidden md:block">{String(index + 1).padStart(2, '0')}</div>
             </div>
           ))}
         </div>
